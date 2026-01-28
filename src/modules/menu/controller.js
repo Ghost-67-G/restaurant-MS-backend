@@ -12,6 +12,9 @@ const createMenuItem = catchAsync(async (req, res) => {
 const getMenuItems = catchAsync(async (req, res) => {
   const filter = pick(req.query, ['name', 'categoryId', 'isAvailable']);
   const options = pick(req.query, ['sortBy', 'limit', 'page']);
+  if (filter.name) {
+    filter.name = { $regex: filter.name, $options: 'i' };
+  }
   const result = await menuItemService.queryMenuItems(filter, options);
   res.send(result);
 });

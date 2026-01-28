@@ -5,6 +5,7 @@ const createMenuItem = {
   body: Joi.object().keys({
     name: Joi.string().required(),
     categoryId: Joi.string().custom(objectId),
+    inventoryItemId: Joi.string().custom(objectId),
     price: Joi.number().min(0).required(),
     costPrice: Joi.number().min(0).required(),
     isAvailable: Joi.boolean(),
@@ -42,6 +43,7 @@ const updateMenuItem = {
     .keys({
       name: Joi.string(),
       categoryId: Joi.string().custom(objectId),
+      inventoryItemId: Joi.string().custom(objectId),
       price: Joi.number().min(0),
       costPrice: Joi.number().min(0),
       isAvailable: Joi.boolean(),

@@ -10,8 +10,12 @@ const menuItemSchema = mongoose.Schema(
     },
     categoryId: {
       type: mongoose.Schema.Types.ObjectId,
-    //   required: true,
+      //   required: true,
       ref: 'Category',
+    },
+    inventoryItemId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Inventory',
     },
     price: {
       type: Number,

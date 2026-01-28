@@ -1,6 +1,7 @@
 const httpStatus = require('http-status');
 const catchAsync = require('../../utils/catchAsync');
 const { authService, userService, tokenService, emailService } = require('../../services');
+const ApiError = require('../../utils/ApiError');
 
 const register = catchAsync(async (req, res) => {
   const user = await userService.createUser(req.body);
@@ -34,7 +35,12 @@ const login = catchAsync(async (req, res) => {
 });
 
 const logout = catchAsync(async (req, res) => {
-  const refreshToken = req.body.refreshToken || req.cookies.refreshToken;
+  const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+  
+  if (!refreshToken) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Refresh token not found');
+  }
+  
   await authService.logout(refreshToken);
 
   // Clear the refresh token cookie
@@ -44,7 +50,12 @@ const logout = catchAsync(async (req, res) => {
 });
 
 const refreshTokens = catchAsync(async (req, res) => {
-  const refreshToken = req.body.refreshToken || req.cookies.refreshToken;
+  const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+  
+  if (!refreshToken) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Refresh token not found');
+  }
+  
   const tokens = await authService.refreshAuth(refreshToken);
 
   // Set new refresh token in httpOnly cookie
