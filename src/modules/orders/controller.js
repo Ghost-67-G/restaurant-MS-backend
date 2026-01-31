@@ -31,6 +31,15 @@ const getOrder = catchAsync(async (req, res) => {
 });
 
 const updateOrder = catchAsync(async (req, res) => {
+  // Role-based restrictions on status updates
+  if (req.user.role === 'cashier' && ['preparing', 'ready'].includes(req.body.status)) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Cashiers cannot set order status to preparing or ready');
+  }
+
+  if (req.user.role === 'kitchen' && ['completed', 'cancelled'].includes(req.body.status)) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Kitchen staff cannot complete or cancel orders');
+  }
+
   const order = await orderService.updateOrderById(req.params.orderId, req.body);
   res.send(order);
 });
