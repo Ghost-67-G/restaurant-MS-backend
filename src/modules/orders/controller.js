@@ -10,7 +10,7 @@ const createOrder = catchAsync(async (req, res) => {
 });
 
 const getOrders = catchAsync(async (req, res) => {
-  const filter = pick(req.query, ['status', 'createdBy']);
+  const filter = pick(req.query, ['status', 'orderType', 'createdBy']);
   const options = pick(req.query, ['sortBy', 'limit', 'page']);
 
   // Cashiers can only see their own orders unless explicitly querying all

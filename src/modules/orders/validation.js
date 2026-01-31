@@ -1,6 +1,6 @@
 const Joi = require('joi');
 const { objectId } = require('../../validations/custom.validation');
-const { ORDER_STATUS } = require('../../config/constants');
+const { ORDER_STATUS, ORDER_TYPE } = require('../../config/constants');
 
 const createOrder = {
   body: Joi.object().keys({
@@ -16,12 +16,18 @@ const createOrder = {
         })
       ),
     totalAmount: Joi.number().min(0).required(),
+    orderType: Joi.string()
+      .valid(...Object.values(ORDER_TYPE))
+      .required(),
+    tableNumber: Joi.string().trim(),
+    deliveryFee: Joi.number().min(0).default(0),
   }),
 };
 
 const getOrders = {
   query: Joi.object().keys({
     status: Joi.string().valid(...Object.values(ORDER_STATUS)),
+    orderType: Joi.string().valid(...Object.values(ORDER_TYPE)),
     createdBy: Joi.string().custom(objectId),
     sortBy: Joi.string(),
     limit: Joi.number().integer(),

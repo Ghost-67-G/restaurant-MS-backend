@@ -6,6 +6,13 @@ const ORDER_STATUS = {
   CANCELLED: 'cancelled',
 };
 
+const ORDER_TYPE = {
+  DINE_IN: 'dine-in',
+  TAKEAWAY: 'takeaway',
+  DELIVERY: 'delivery',
+};
+
 module.exports = {
   ORDER_STATUS,
+  ORDER_TYPE,
 };

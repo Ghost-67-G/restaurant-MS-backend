@@ -3,23 +3,24 @@ const auth = require('../../middlewares/auth');
 const validate = require('../../middlewares/validate');
 const orderValidation = require('./validation');
 const orderController = require('./controller');
+const { PERMISSIONS } = require('../../config/permissions');
 
 const router = express.Router();
 
 router
   .route('/')
-  .post(auth('createOrders'), validate(orderValidation.createOrder), orderController.createOrder)
-  .get(auth('viewOrders'), validate(orderValidation.getOrders), orderController.getOrders);
+  .post(auth(PERMISSIONS.ORDER.CREATE), validate(orderValidation.createOrder), orderController.createOrder)
+  .get(auth(PERMISSIONS.ORDER.VIEW), validate(orderValidation.getOrders), orderController.getOrders);
 
 router
   .route('/:orderId')
-  .get(auth('viewOrders'), validate(orderValidation.getOrder), orderController.getOrder)
-  .patch(auth('updateOrderStatus'), validate(orderValidation.updateOrder), orderController.updateOrder)
-  .delete(auth('manageOrders'), validate(orderValidation.deleteOrder), orderController.deleteOrder);
+  .get(auth(PERMISSIONS.ORDER.VIEW), validate(orderValidation.getOrder), orderController.getOrder)
+  .patch(auth(PERMISSIONS.ORDER.UPDATE_STATUS), validate(orderValidation.updateOrder), orderController.updateOrder)
+  .delete(auth(PERMISSIONS.ORDER.DELETE), validate(orderValidation.deleteOrder), orderController.deleteOrder);
 
 router
   .route('/:orderId/cancel')
-  .patch(auth('cancelOrder'), validate(orderValidation.cancelOrder), orderController.cancelOrder);
+  .patch(auth(PERMISSIONS.ORDER.CANCEL), validate(orderValidation.cancelOrder), orderController.cancelOrder);
 
 module.exports = router;
 

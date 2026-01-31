@@ -1,65 +1,76 @@
+const { PERMISSIONS } = require('./permissions');
+
 /**
  * Role-based access control configuration
- *
+ * 
  * ORDER LIFECYCLE:
  * - pending → default status when order created
  * - preparing → kitchen marks when they start
  * - completed → kitchen or cashier marks when done (inventory reduced)
  * - cancelled → owner or cashier can cancel
- *
+ * 
  * CASHIER:
- * - POS screen access (managePOS)
- * - Create orders (createOrders)
- * - View own orders by default (viewOrders)
- * - Update order status: pending → completed/cancelled (updateOrderStatus, cancelOrder)
- * - View menu items (viewMenu)
- * - View dashboard stats (viewDashboard)
- *
+ * - POS screen access
+ * - Create orders
+ * - View own orders by default
+ * - Update order status: pending → completed
+ * - Cancel orders
+ * - View menu and dashboard
+ * 
  * KITCHEN:
- * - View orders list (viewOrders)
- * - Update order status: pending → preparing → completed (updateOrderStatus)
- * - View menu items (viewMenu)
- * - No dashboard access
- * - No inventory access
- * - Cannot cancel orders
- *
+ * - View all orders
+ * - Update order status: pending → preparing → completed
+ * - View menu items
+ * - No dashboard, inventory, or cancel access
+ * 
  * OWNER:
  * - Full access to everything
- * - CRUD menu items (manageMenu, viewMenu)
- * - CRUD inventory (manageInventory)
- * - View all orders and reports (viewOrders, viewDashboard)
- * - Manage users (manageUsers, getUsers)
- * - Cancel/Delete orders (manageOrders, cancelOrder)
+ * - All CRUD operations on all modules
  */
 
 const allRoles = {
   owner: [
-    'manageUsers',
-    'getUsers',
-    'manageMenu',
-    'viewMenu',
-    'manageOrders',
-    'createOrders',
-    'viewOrders',
-    'updateOrderStatus',
-    'cancelOrder',
-    'manageInventory',
-    'viewDashboard',
-    'managePOS',
+    // User management
+    PERMISSIONS.USER.VIEW,
+    PERMISSIONS.USER.MANAGE,
+    // Menu management
+    PERMISSIONS.MENU.VIEW,
+    PERMISSIONS.MENU.MANAGE,
+    // Order management
+    PERMISSIONS.ORDER.CREATE,
+    PERMISSIONS.ORDER.VIEW,
+    PERMISSIONS.ORDER.UPDATE_STATUS,
+    PERMISSIONS.ORDER.CANCEL,
+    PERMISSIONS.ORDER.DELETE,
+    // Inventory management
+    PERMISSIONS.INVENTORY.VIEW,
+    PERMISSIONS.INVENTORY.MANAGE,
+    PERMISSIONS.INVENTORY.ADJUST,
+    // Dashboard & Reports
+    PERMISSIONS.DASHBOARD.VIEW,
+    PERMISSIONS.REPORTS.VIEW,
+    // POS access
+    PERMISSIONS.POS.ACCESS,
   ],
   cashier: [
-    'managePOS',
-    'createOrders',
-    'viewOrders',
-    'updateOrderStatus',
-    'cancelOrder', // Can cancel orders
-    'viewMenu',
-    'viewDashboard',
+    // POS operations
+    PERMISSIONS.POS.ACCESS,
+    // Order operations
+    PERMISSIONS.ORDER.CREATE,
+    PERMISSIONS.ORDER.VIEW,
+    PERMISSIONS.ORDER.UPDATE_STATUS,
+    PERMISSIONS.ORDER.CANCEL,
+    // View menu
+    PERMISSIONS.MENU.VIEW,
+    // Dashboard access
+    PERMISSIONS.DASHBOARD.VIEW,
   ],
   kitchen: [
-    'viewOrders',
-    'updateOrderStatus', // preparing → completed only
-    'viewMenu',
+    // Order operations only
+    PERMISSIONS.ORDER.VIEW,
+    PERMISSIONS.ORDER.UPDATE_STATUS,
+    // View menu
+    PERMISSIONS.MENU.VIEW,
   ],
 };
 

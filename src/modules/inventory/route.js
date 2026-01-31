@@ -3,19 +3,20 @@ const auth = require('../../middlewares/auth');
 const validate = require('../../middlewares/validate');
 const inventoryValidation = require('./validation');
 const inventoryController = require('./controller');
+const { PERMISSIONS } = require('../../config/permissions');
 
 const router = express.Router();
 
 router
   .route('/')
-  .post(auth('manageInventory'), validate(inventoryValidation.createInventory), inventoryController.createInventory)
-  .get(auth('manageInventory'), validate(inventoryValidation.getInventoryItems), inventoryController.getInventoryItems);
+  .post(auth(PERMISSIONS.INVENTORY.MANAGE), validate(inventoryValidation.createInventory), inventoryController.createInventory)
+  .get(auth(PERMISSIONS.INVENTORY.VIEW), validate(inventoryValidation.getInventoryItems), inventoryController.getInventoryItems);
 
 router
   .route('/:inventoryId')
-  .get(auth('manageInventory'), validate(inventoryValidation.getInventory), inventoryController.getInventory)
-  .patch(auth('manageInventory'), validate(inventoryValidation.updateInventory), inventoryController.updateInventory)
-  .delete(auth('manageInventory'), validate(inventoryValidation.deleteInventory), inventoryController.deleteInventory);
+  .get(auth(PERMISSIONS.INVENTORY.VIEW), validate(inventoryValidation.getInventory), inventoryController.getInventory)
+  .patch(auth(PERMISSIONS.INVENTORY.ADJUST), validate(inventoryValidation.updateInventory), inventoryController.updateInventory)
+  .delete(auth(PERMISSIONS.INVENTORY.MANAGE), validate(inventoryValidation.deleteInventory), inventoryController.deleteInventory);
 
 module.exports = router;
 

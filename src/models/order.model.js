@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const { toJSON, paginate } = require('./plugins');
-const { ORDER_STATUS } = require('../config/constants');
+const { ORDER_STATUS, ORDER_TYPE } = require('../config/constants');
 
 const orderItemSchema = mongoose.Schema({
   menuItemId: {
@@ -42,6 +42,20 @@ const orderSchema = mongoose.Schema(
       type: Number,
       required: true,
       min: 0,
+    },
+    orderType: {
+      type: String,
+      enum: Object.values(ORDER_TYPE),
+      required: true,
+    },
+    tableNumber: {
+      type: String,
+      trim: true,
+    },
+    deliveryFee: {
+      type: Number,
+      min: 0,
+      default: 0,
     },
     status: {
       type: String,

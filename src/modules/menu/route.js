@@ -3,19 +3,20 @@ const auth = require('../../middlewares/auth');
 const validate = require('../../middlewares/validate');
 const menuValidation = require('./validation');
 const menuController = require('./controller');
+const { PERMISSIONS } = require('../../config/permissions');
 
 const router = express.Router();
 
 router
   .route('/items')
-  .post(auth('manageMenu'), validate(menuValidation.createMenuItem), menuController.createMenuItem)
-  .get(auth('viewMenu'), validate(menuValidation.getMenuItems), menuController.getMenuItems);
+  .post(auth(PERMISSIONS.MENU.MANAGE), validate(menuValidation.createMenuItem), menuController.createMenuItem)
+  .get(auth(PERMISSIONS.MENU.VIEW), validate(menuValidation.getMenuItems), menuController.getMenuItems);
 
 router
   .route('/items/:menuItemId')
-  .get(auth('viewMenu'), validate(menuValidation.getMenuItem), menuController.getMenuItem)
-  .patch(auth('manageMenu'), validate(menuValidation.updateMenuItem), menuController.updateMenuItem)
-  .delete(auth('manageMenu'), validate(menuValidation.deleteMenuItem), menuController.deleteMenuItem);
+  .get(auth(PERMISSIONS.MENU.VIEW), validate(menuValidation.getMenuItem), menuController.getMenuItem)
+  .patch(auth(PERMISSIONS.MENU.MANAGE), validate(menuValidation.updateMenuItem), menuController.updateMenuItem)
+  .delete(auth(PERMISSIONS.MENU.MANAGE), validate(menuValidation.deleteMenuItem), menuController.deleteMenuItem);
 
 module.exports = router;
 

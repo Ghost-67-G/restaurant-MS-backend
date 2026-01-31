@@ -3,12 +3,13 @@ const auth = require('../../middlewares/auth');
 const validate = require('../../middlewares/validate');
 const dashboardValidation = require('./validation');
 const dashboardController = require('./controller');
+const { PERMISSIONS } = require('../../config/permissions');
 
 const router = express.Router();
 
 router
   .route('/today')
-  .get(auth('viewDashboard'), validate(dashboardValidation.getTodayStats), dashboardController.getTodayStats);
+  .get(auth(PERMISSIONS.DASHBOARD.VIEW), validate(dashboardValidation.getTodayStats), dashboardController.getTodayStats);
 
 module.exports = router;
 
