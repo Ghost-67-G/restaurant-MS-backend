@@ -15,12 +15,16 @@ const createOrder = {
           quantity: Joi.number().integer().min(1).required(),
         })
       ),
+    subtotal: Joi.number().min(0).required(),
+    taxName: Joi.string().trim(),
+    taxPercentage: Joi.number().min(0).max(100),
+    taxAmount: Joi.number().min(0).default(0),
+    deliveryFee: Joi.number().min(0).default(0),
     totalAmount: Joi.number().min(0).required(),
     orderType: Joi.string()
       .valid(...Object.values(ORDER_TYPE))
       .required(),
     tableNumber: Joi.string().trim(),
-    deliveryFee: Joi.number().min(0).default(0),
   }),
 };
 

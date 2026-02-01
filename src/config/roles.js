@@ -46,6 +46,9 @@ const allRoles = {
     PERMISSIONS.INVENTORY.VIEW,
     PERMISSIONS.INVENTORY.MANAGE,
     PERMISSIONS.INVENTORY.ADJUST,
+    // Tax configuration
+    PERMISSIONS.TAX.VIEW,
+    PERMISSIONS.TAX.MANAGE,
     // Dashboard & Reports
     PERMISSIONS.DASHBOARD.VIEW,
     PERMISSIONS.REPORTS.VIEW,
@@ -62,6 +65,8 @@ const allRoles = {
     PERMISSIONS.ORDER.CANCEL,
     // View menu
     PERMISSIONS.MENU.VIEW,
+    // View tax
+    PERMISSIONS.TAX.VIEW,
     // Dashboard access
     PERMISSIONS.DASHBOARD.VIEW,
   ],

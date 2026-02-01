@@ -38,6 +38,30 @@ const orderSchema = mongoose.Schema(
         message: 'Order must contain at least one item',
       },
     },
+    subtotal: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    taxName: {
+      type: String,
+      trim: true,
+    },
+    taxPercentage: {
+      type: Number,
+      min: 0,
+      max: 100,
+    },
+    taxAmount: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    deliveryFee: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
     totalAmount: {
       type: Number,
       required: true,
@@ -51,11 +75,6 @@ const orderSchema = mongoose.Schema(
     tableNumber: {
       type: String,
       trim: true,
-    },
-    deliveryFee: {
-      type: Number,
-      min: 0,
-      default: 0,
     },
     status: {
       type: String,
