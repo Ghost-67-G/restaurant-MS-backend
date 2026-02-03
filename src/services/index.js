@@ -7,3 +7,6 @@ module.exports.orderService = require('./order.service');
 module.exports.dashboardService = require('./dashboard.service');
 module.exports.inventoryService = require('./inventory.service');
 module.exports.taxService = require('./tax.service');
+module.exports.ingredientService = require('./ingredient.service');
+module.exports.recipeService = require('./recipe.service');
+module.exports.inventoryLedgerService = require('./inventoryLedger.service');

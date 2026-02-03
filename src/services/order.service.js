@@ -1,8 +1,7 @@
 const httpStatus = require('http-status');
 const Order = require('../models/order.model');
-const MenuItem = require('../models/menuItem.model');
 const { ORDER_STATUS } = require('../config/constants');
-const inventoryService = require('./inventory.service');
+const { eventEmitter, EVENTS } = require('../utils/eventEmitter');
 const ApiError = require('../utils/ApiError');
 
 /**
@@ -16,7 +15,16 @@ const createOrder = async (orderBody, userId) => {
     ...orderBody,
     createdBy: userId,
   };
-  return Order.create(orderData);
+  const order = await Order.create(orderData);
+  
+  // Emit event for analytics/notifications
+  eventEmitter.emitEvent(EVENTS.ORDER_CREATED, {
+    orderId: order._id.toString(),
+    userId,
+    orderData,
+  });
+  
+  return order;
 };
 
 /**
@@ -46,9 +54,10 @@ const getOrderById = async (id) => {
  * Update order by id
  * @param {ObjectId} orderId
  * @param {Object} updateBody
+ * @param {ObjectId} userId - User updating the order
  * @returns {Promise<Order>}
  */
-const updateOrderById = async (orderId, updateBody) => {
+const updateOrderById = async (orderId, updateBody, userId) => {
   const order = await getOrderById(orderId);
   if (!order) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Order not found');
@@ -62,22 +71,40 @@ const updateOrderById = async (orderId, updateBody) => {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot update completed order');
   }
 
-  // If order is being marked as completed, reduce inventory
-  if (updateBody.status === ORDER_STATUS.COMPLETED && order.status !== ORDER_STATUS.COMPLETED) {
-    // Process each item in the order
-    for (const item of order.items) {
-      // Get the menu item to find its linked inventory
-      const menuItem = await MenuItem.findById(item.menuItemId);
-      
-      // If menu item has linked inventory, reduce it
-      if (menuItem && menuItem.inventoryItemId) {
-        await inventoryService.reduceInventory(menuItem.inventoryItemId, item.quantity);
-      }
-    }
-  }
+  // Store previous status for event handlers
+  const previousStatus = order.status;
 
+  // Update order
   Object.assign(order, updateBody);
   await order.save();
+
+  // Emit events based on status changes
+  if (updateBody.status === ORDER_STATUS.COMPLETED && previousStatus !== ORDER_STATUS.COMPLETED) {
+    // Emit ORDER_COMPLETED event - inventory deduction will be handled by event handler
+    eventEmitter.emitEvent(EVENTS.ORDER_COMPLETED, {
+      orderId: orderId.toString(),
+      userId,
+      previousStatus,
+      order: order.toJSON(),
+    });
+  } else if (updateBody.status === ORDER_STATUS.CANCELLED && previousStatus !== ORDER_STATUS.CANCELLED) {
+    // Emit ORDER_CANCELLED event - inventory restoration (if needed) handled by event handler
+    eventEmitter.emitEvent(EVENTS.ORDER_CANCELLED, {
+      orderId: orderId.toString(),
+      userId,
+      previousStatus,
+      order: order.toJSON(),
+    });
+  } else {
+    // Generic update event
+    eventEmitter.emitEvent(EVENTS.ORDER_UPDATED, {
+      orderId: orderId.toString(),
+      userId,
+      status: order.status,
+      previousStatus,
+    });
+  }
+
   return order;
 };
 
@@ -102,8 +129,17 @@ const cancelOrderById = async (orderId) => {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Order is already cancelled');
   }
 
+  const previousStatus = order.status;
   order.status = ORDER_STATUS.CANCELLED;
   await order.save();
+
+  // Emit ORDER_CANCELLED event
+  eventEmitter.emitEvent(EVENTS.ORDER_CANCELLED, {
+    orderId: orderId.toString(),
+    previousStatus,
+    order: order.toJSON(),
+  });
+
   return order;
 };
 

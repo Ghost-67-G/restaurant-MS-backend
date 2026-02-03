@@ -13,6 +13,7 @@ const menuItemSchema = mongoose.Schema(
       //   required: true,
       ref: 'Category',
     },
+    // inventoryItemId is deprecated - use recipes instead
     inventoryItemId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Inventory',
@@ -54,6 +55,13 @@ const menuItemSchema = mongoose.Schema(
 // add plugin that converts mongoose to json
 menuItemSchema.plugin(toJSON);
 menuItemSchema.plugin(paginate);
+
+// Virtual to populate recipes
+menuItemSchema.virtual('recipes', {
+  ref: 'Recipe',
+  localField: '_id',
+  foreignField: 'menuItemId',
+});
 
 /**
  * @typedef MenuItem

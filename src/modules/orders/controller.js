@@ -40,7 +40,7 @@ const updateOrder = catchAsync(async (req, res) => {
     throw new ApiError(httpStatus.FORBIDDEN, 'Kitchen staff cannot complete or cancel orders');
   }
 
-  const order = await orderService.updateOrderById(req.params.orderId, req.body);
+  const order = await orderService.updateOrderById(req.params.orderId, req.body, req.user.id);
   res.send(order);
 });
 

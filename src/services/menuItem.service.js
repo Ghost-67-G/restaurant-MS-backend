@@ -1,14 +1,23 @@
 const httpStatus = require('http-status');
 const MenuItem = require('../models/menuItem.model');
 const ApiError = require('../utils/ApiError');
+const recipeService = require('./recipe.service');
 
 /**
  * Create a menu item
  * @param {Object} menuItemBody
+ * @param {Array} recipes - Array of {ingredientId, quantityUsed}
  * @returns {Promise<MenuItem>}
  */
-const createMenuItem = async (menuItemBody) => {
-  return MenuItem.create(menuItemBody);
+const createMenuItem = async (menuItemBody, recipes = []) => {
+  const menuItem = await MenuItem.create(menuItemBody);
+  
+  // Create recipes if provided
+  if (recipes && recipes.length > 0) {
+    await recipeService.createRecipesForMenuItem(menuItem.id, recipes);
+  }
+  
+  return menuItem;
 };
 
 /**
@@ -28,10 +37,23 @@ const queryMenuItems = async (filter, options) => {
 /**
  * Get menu item by id
  * @param {ObjectId} id
+ * @param {boolean} includeRecipes - Whether to populate recipes
  * @returns {Promise<MenuItem>}
  */
-const getMenuItemById = async (id) => {
-  return MenuItem.findById(id);
+const getMenuItemById = async (id, includeRecipes = false) => {
+  const query = MenuItem.findById(id);
+  
+  if (includeRecipes) {
+    query.populate({
+      path: 'recipes',
+      populate: {
+        path: 'ingredientId',
+        select: 'name unit currentStock',
+      },
+    });
+  }
+  
+  return query;
 };
 
 /**
@@ -60,6 +82,10 @@ const deleteMenuItemById = async (menuItemId) => {
   if (!menuItem) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Menu item not found');
   }
+  
+  // Delete associated recipes
+  await recipeService.deleteRecipesByMenuItem(menuItemId);
+  
   await menuItem.remove();
   return menuItem;
 };
