@@ -81,6 +81,23 @@ const reduceInventory = async (inventoryId, quantity) => {
   return inventory;
 };
 
+/**
+ * Increase inventory quantity (for refunds/restocks)
+ * @param {ObjectId} inventoryId
+ * @param {Number} quantity
+ * @returns {Promise<Inventory>}
+ */
+const increaseInventory = async (inventoryId, quantity) => {
+  const inventory = await getInventoryById(inventoryId);
+  if (!inventory) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Inventory item not found');
+  }
+
+  inventory.quantity += quantity;
+  await inventory.save();
+  return inventory;
+};
+
 module.exports = {
   createInventory,
   queryInventory,
@@ -88,4 +105,5 @@ module.exports = {
   updateInventoryById,
   deleteInventoryById,
   reduceInventory,
+  increaseInventory,
 };

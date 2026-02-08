@@ -1,13 +1,13 @@
 /**
  * Permission Registry
- * 
+ *
  * This file documents all available permissions in the system.
  * Use this as reference when adding new features or roles.
- * 
+ *
  * Naming Convention: module.action
  * - module: The feature/resource (order, menu, inventory, etc.)
  * - action: The operation (view, create, manage, etc.)
- * 
+ *
  * Standard Actions:
  * - view: Read/list items
  * - create: Create new items
@@ -24,6 +24,7 @@ const PERMISSIONS = {
     UPDATE_STATUS: 'order.updateStatus',
     CANCEL: 'order.cancel',
     DELETE: 'order.delete',
+    MANAGE: 'order.manage', // create, update status, cancel, delete
   },
 
   // Menu Management
@@ -81,6 +82,7 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.ORDER.UPDATE_STATUS,
     PERMISSIONS.ORDER.CANCEL,
     PERMISSIONS.ORDER.DELETE,
+    PERMISSIONS.ORDER.MANAGE,
     PERMISSIONS.INVENTORY.VIEW,
     PERMISSIONS.INVENTORY.MANAGE,
     PERMISSIONS.INVENTORY.ADJUST,

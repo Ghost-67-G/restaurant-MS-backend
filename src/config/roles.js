@@ -2,13 +2,13 @@ const { PERMISSIONS } = require('./permissions');
 
 /**
  * Role-based access control configuration
- * 
+ *
  * ORDER LIFECYCLE:
  * - pending → default status when order created
  * - preparing → kitchen marks when they start
  * - completed → kitchen or cashier marks when done (inventory reduced)
  * - cancelled → owner or cashier can cancel
- * 
+ *
  * CASHIER:
  * - POS screen access
  * - Create orders
@@ -16,13 +16,13 @@ const { PERMISSIONS } = require('./permissions');
  * - Update order status: pending → completed
  * - Cancel orders
  * - View menu and dashboard
- * 
+ *
  * KITCHEN:
  * - View all orders
  * - Update order status: pending → preparing → completed
  * - View menu items
  * - No dashboard, inventory, or cancel access
- * 
+ *
  * OWNER:
  * - Full access to everything
  * - All CRUD operations on all modules
@@ -42,6 +42,7 @@ const allRoles = {
     PERMISSIONS.ORDER.UPDATE_STATUS,
     PERMISSIONS.ORDER.CANCEL,
     PERMISSIONS.ORDER.DELETE,
+    PERMISSIONS.ORDER.MANAGE,
     // Inventory management
     PERMISSIONS.INVENTORY.VIEW,
     PERMISSIONS.INVENTORY.MANAGE,

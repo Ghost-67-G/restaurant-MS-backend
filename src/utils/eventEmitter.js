@@ -59,6 +59,8 @@ const EVENTS = {
   ORDER_UPDATED: 'order:updated',
   ORDER_COMPLETED: 'order:completed',
   ORDER_CANCELLED: 'order:cancelled',
+  ORDER_VOIDED: 'order:voided',
+  ORDER_REFUNDED: 'order:refunded',
   
   // Inventory events
   INVENTORY_LOW: 'inventory:low',

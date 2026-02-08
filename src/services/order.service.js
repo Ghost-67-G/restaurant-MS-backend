@@ -153,6 +153,20 @@ const deleteOrderById = async (orderId) => {
   if (!order) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Order not found');
   }
+
+  // Prevent deleting completed orders - use refund/void instead
+  if (order.status === ORDER_STATUS.COMPLETED) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      'Cannot delete completed orders. Use refund or void instead.'
+    );
+  }
+
+  // Prevent deleting refunded orders
+  if (order.isRefunded || order.refundedAmount > 0) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot delete orders with refunds');
+  }
+
   await order.remove();
   return order;
 };

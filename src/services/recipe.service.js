@@ -151,6 +151,40 @@ const deductIngredientsForMenuItem = async (menuItemId, quantity, orderId, userI
   await inventoryLedgerService.createBulkLedgerEntries(ledgerEntries);
 };
 
+/**
+ * Restore ingredients for menu item (when order is refunded)
+ * @param {ObjectId} menuItemId
+ * @param {number} quantity - Number of items to restore
+ * @param {ObjectId} orderId - Order reference ID
+ * @param {ObjectId} userId - User processing the refund
+ * @param {string} reason - Refund reason
+ * @returns {Promise<void>}
+ */
+const restoreIngredientsForMenuItem = async (menuItemId, quantity, orderId, userId, reason) => {
+  const recipes = await Recipe.find({ menuItemId }).populate('ingredientId');
+
+  if (recipes.length === 0) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'No recipe found for this menu item');
+  }
+
+  // Prepare ledger entries for bulk operation
+  const ledgerEntries = recipes.map((recipe) => {
+    const restoredQuantity = recipe.quantityUsed * quantity;
+    return {
+      ingredientId: recipe.ingredientId._id,
+      type: 'IN',
+      quantity: restoredQuantity, // Positive for restoration
+      reason: reason || `Refund restoration for ${recipe.ingredientId.name} (${quantity}x menu item)`,
+      referenceType: 'ORDER',
+      referenceId: orderId,
+      createdBy: userId,
+    };
+  });
+
+  // Use bulk ledger entry creation (includes transaction)
+  await inventoryLedgerService.createBulkLedgerEntries(ledgerEntries);
+};
+
 module.exports = {
   createRecipe,
   createRecipesForMenuItem,
@@ -161,4 +195,5 @@ module.exports = {
   deleteRecipesByMenuItem,
   updateRecipesForMenuItem,
   deductIngredientsForMenuItem,
+  restoreIngredientsForMenuItem,
 };

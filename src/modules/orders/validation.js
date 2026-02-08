@@ -1,6 +1,6 @@
 const Joi = require('joi');
 const { objectId } = require('../../validations/custom.validation');
-const { ORDER_STATUS, ORDER_TYPE } = require('../../config/constants');
+const { ORDER_STATUS, ORDER_TYPE, DISCOUNT_TYPE } = require('../../config/constants');
 
 const createOrder = {
   body: Joi.object().keys({
@@ -16,6 +16,9 @@ const createOrder = {
         })
       ),
     subtotal: Joi.number().min(0).required(),
+    discountType: Joi.string().valid(...Object.values(DISCOUNT_TYPE)),
+    discountValue: Joi.number().min(0),
+    discountAmount: Joi.number().min(0).default(0),
     taxName: Joi.string().trim(),
     taxPercentage: Joi.number().min(0).max(100),
     taxAmount: Joi.number().min(0).default(0),

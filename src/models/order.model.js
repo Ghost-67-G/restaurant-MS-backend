@@ -43,6 +43,19 @@ const orderSchema = mongoose.Schema(
       required: true,
       min: 0,
     },
+    discountType: {
+      type: String,
+      enum: ['PERCENT', 'FLAT'],
+    },
+    discountValue: {
+      type: Number,
+      min: 0,
+    },
+    discountAmount: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
     taxName: {
       type: String,
       trim: true,
@@ -85,6 +98,19 @@ const orderSchema = mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
+    },
+    isVoided: {
+      type: Boolean,
+      default: false,
+    },
+    isRefunded: {
+      type: Boolean,
+      default: false,
+    },
+    refundedAmount: {
+      type: Number,
+      min: 0,
+      default: 0,
     },
   },
   {

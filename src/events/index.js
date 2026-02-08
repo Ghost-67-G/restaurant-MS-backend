@@ -106,6 +106,40 @@ const registerEventHandlers = () => {
     }
   });
 
+  eventEmitter.on(EVENTS.ORDER_REFUNDED, async (data) => {
+    const logId = await createEventLog(EVENTS.ORDER_REFUNDED, data);
+    try {
+      if (logId) {
+        await EventLog.findByIdAndUpdate(logId, {
+          status: 'processing',
+          processingStartedAt: new Date(),
+        });
+      }
+      await orderEvents.handleOrderRefunded(data);
+      await updateEventLog(logId, 'completed');
+    } catch (error) {
+      logger.error('Error in ORDER_REFUNDED handler:', error);
+      await updateEventLog(logId, 'failed', error.message);
+    }
+  });
+
+  eventEmitter.on(EVENTS.ORDER_VOIDED, async (data) => {
+    const logId = await createEventLog(EVENTS.ORDER_VOIDED, data);
+    try {
+      if (logId) {
+        await EventLog.findByIdAndUpdate(logId, {
+          status: 'processing',
+          processingStartedAt: new Date(),
+        });
+      }
+      await orderEvents.handleOrderVoided(data);
+      await updateEventLog(logId, 'completed');
+    } catch (error) {
+      logger.error('Error in ORDER_VOIDED handler:', error);
+      await updateEventLog(logId, 'failed', error.message);
+    }
+  });
+
   // Add more event handlers as needed
   // Example: Inventory events, user events, etc.
 

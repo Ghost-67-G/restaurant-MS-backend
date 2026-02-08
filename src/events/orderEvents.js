@@ -3,6 +3,7 @@ const MenuItem = require('../models/menuItem.model');
 const Order = require('../models/order.model');
 const recipeService = require('../services/recipe.service');
 const inventoryService = require('../services/inventory.service');
+const invoiceService = require('../services/invoice.service');
 
 /**
  * Handle inventory deduction when an order is completed
@@ -61,6 +62,16 @@ const handleOrderCompleted = async (eventData) => {
     await Promise.all(deductionPromises);
 
     logger.info(`Successfully processed inventory deduction for order: ${orderId}`);
+
+    // Generate invoice for the completed order
+    try {
+      const invoice = await invoiceService.createInvoice(orderId, userId);
+      logger.info(`Invoice ${invoice.invoiceNumber} generated for order ${orderId}`);
+    } catch (invoiceError) {
+      // Don't fail the whole process if invoice generation fails
+      logger.error(`Failed to generate invoice for order ${orderId}:`, invoiceError);
+      // Invoice can be generated manually later if needed
+    }
   } catch (error) {
     logger.error(`Error processing ORDER_COMPLETED event for order ${orderId}:`, error);
     
@@ -139,9 +150,102 @@ const handleOrderUpdated = async (eventData) => {
   // Future: Send to analytics, update metrics, etc.
 };
 
+/**
+ * Handle order refund - restore inventory
+ *
+ * @param {Object} eventData - Event data
+ * @param {string} eventData.orderId - Order ID
+ * @param {string} eventData.userId - User who initiated the refund
+ * @param {number} eventData.amount - Refund amount
+ * @param {boolean} eventData.isFullRefund - Whether this is a full refund
+ */
+const handleOrderRefunded = async (eventData) => {
+  const { orderId, userId, amount, isFullRefund, reason } = eventData;
+
+  try {
+    logger.info(`Processing inventory restoration for refunded order: ${orderId}`);
+
+    // Fetch the order
+    const order = await Order.findById(orderId);
+    if (!order) {
+      logger.error(`Order not found: ${orderId}`);
+      return;
+    }
+
+    // Only restore inventory for full refunds to keep it simple
+    // Partial refunds would require manual inventory adjustment
+    if (!isFullRefund) {
+      logger.info(`Partial refund for order ${orderId} - manual inventory adjustment may be needed`);
+      return;
+    }
+
+    logger.info(`Full refund detected for order ${orderId} - restoring inventory`);
+
+    // Process each item in the order
+    const restorationPromises = order.items.map(async (item) => {
+      try {
+        const menuItem = await MenuItem.findById(item.menuItemId);
+        
+        // Try to restore ingredients using recipe system
+        try {
+          // Create positive ledger entries to restore stock
+          await recipeService.restoreIngredientsForMenuItem(
+            item.menuItemId,
+            item.quantity,
+            orderId,
+            userId,
+            `Refund: ${reason}`
+          );
+          logger.info(`Restored ingredients for menu item ${item.menuItemId} via recipe system`);
+        } catch (error) {
+          // If recipe-based restoration fails, fall back to old inventory system
+          if (menuItem && menuItem.inventoryItemId) {
+            await inventoryService.increaseInventory(menuItem.inventoryItemId, item.quantity);
+            logger.info(`Restored inventory for menu item ${item.menuItemId} via legacy system`);
+          } else {
+            logger.warn(`Could not restore inventory for item ${item.menuItemId}:`, error.message);
+          }
+        }
+      } catch (itemError) {
+        logger.error(`Failed to restore inventory for item ${item.menuItemId}:`, itemError);
+        // Don't throw - continue with other items
+      }
+    });
+
+    await Promise.all(restorationPromises);
+
+    logger.info(`Successfully processed inventory restoration for refunded order: ${orderId}`);
+  } catch (error) {
+    logger.error(`Error processing ORDER_REFUNDED event for order ${orderId}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Handle order void - no inventory movement needed
+ *
+ * @param {Object} eventData - Event data
+ * @param {string} eventData.orderId - Order ID
+ * @param {string} eventData.reason - Void reason
+ */
+const handleOrderVoided = async (eventData) => {
+  const { orderId, reason } = eventData;
+
+  try {
+    logger.info(`Order voided: ${orderId} - Reason: ${reason}`);
+    
+    // No inventory movement needed since order was never completed
+    logger.info(`No inventory restoration needed for voided order ${orderId}`);
+  } catch (error) {
+    logger.error(`Error processing ORDER_VOIDED event for order ${orderId}:`, error);
+  }
+};
+
 module.exports = {
   handleOrderCompleted,
   handleOrderCancelled,
   handleOrderCreated,
   handleOrderUpdated,
+  handleOrderRefunded,
+  handleOrderVoided,
 };
