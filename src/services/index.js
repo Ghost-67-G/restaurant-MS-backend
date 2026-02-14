@@ -10,3 +10,7 @@ module.exports.taxService = require('./tax.service');
 module.exports.ingredientService = require('./ingredient.service');
 module.exports.recipeService = require('./recipe.service');
 module.exports.inventoryLedgerService = require('./inventoryLedger.service');
+module.exports.orderAdjustmentService = require('./orderAdjustment.service');
+module.exports.invoiceService = require('./invoice.service');
+module.exports.stockAlertService = require('./stockAlert.service');
+module.exports.wasteService = require('./waste.service');

@@ -7,3 +7,7 @@ module.exports.Tax = require('./tax.model');
 module.exports.Ingredient = require('./ingredient.model');
 module.exports.Recipe = require('./recipe.model');
 module.exports.InventoryLedger = require('./inventoryLedger.model');
+module.exports.EventLog = require('./eventLog.model');
+module.exports.OrderAdjustment = require('./orderAdjustment.model');
+module.exports.Invoice = require('./invoice.model');
+module.exports.StockAlert = require('./stockAlert.model');

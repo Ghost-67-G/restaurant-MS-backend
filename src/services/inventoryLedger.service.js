@@ -3,6 +3,7 @@ const httpStatus = require('http-status');
 const mongoose = require('mongoose');
 const { InventoryLedger, Ingredient } = require('../models');
 const ApiError = require('../utils/ApiError');
+const stockAlertService = require('./stockAlert.service');
 
 /**
  * Create a ledger entry and update ingredient stock in a transaction
@@ -57,6 +58,13 @@ const createLedgerEntry = async (ledgerData) => {
 
     // Commit transaction
     await session.commitTransaction();
+
+    // Check for low stock alert (after transaction commits)
+    // Run asynchronously, don't wait for it
+    stockAlertService.checkIngredientStock(ingredient.id).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('Error checking stock alert:', err);
+    });
 
     return {
       ledger: ledgerEntry[0],
@@ -121,6 +129,16 @@ const createBulkLedgerEntries = async (ledgerEntries) => {
     }
 
     await session.commitTransaction();
+
+    // Check for low stock alerts for all affected ingredients
+    // Run asynchronously, don't wait
+    results.forEach((result) => {
+      stockAlertService.checkIngredientStock(result.ingredient.id).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('Error checking stock alert:', err);
+      });
+    });
+
     return results;
   } catch (error) {
     await session.abortTransaction();
