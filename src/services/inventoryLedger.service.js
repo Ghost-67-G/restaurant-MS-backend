@@ -4,9 +4,25 @@ const mongoose = require('mongoose');
 const { InventoryLedger, Ingredient } = require('../models');
 const ApiError = require('../utils/ApiError');
 const stockAlertService = require('./stockAlert.service');
+const logger = require('../config/logger');
 
 /**
- * Create a ledger entry and update ingredient stock in a transaction
+ * Check if MongoDB supports transactions (requires replica set)
+ * @returns {Promise<boolean>}
+ */
+const supportsTransactions = async () => {
+  try {
+    const admin = mongoose.connection.db.admin();
+    const info = await admin.replSetGetStatus();
+    return !!info;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Create a ledger entry and update ingredient stock
+ * Uses transaction if available (replica set), otherwise falls back to non-transactional
  * @param {Object} ledgerData - Ledger entry data
  * @param {ObjectId} ledgerData.ingredientId
  * @param {string} ledgerData.type - IN, OUT, WASTE, ADJUSTMENT
@@ -18,18 +34,28 @@ const stockAlertService = require('./stockAlert.service');
  * @returns {Promise<{ledger: InventoryLedger, ingredient: Ingredient}>}
  */
 const createLedgerEntry = async (ledgerData) => {
+  const useTransaction = await supportsTransactions();
+
+  if (useTransaction) {
+    return createLedgerEntryWithTransaction(ledgerData);
+  }
+  return createLedgerEntryWithoutTransaction(ledgerData);
+};
+
+/**
+ * Create ledger entry WITH MongoDB transaction (replica set required)
+ */
+const createLedgerEntryWithTransaction = async (ledgerData) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    // Get the ingredient with lock
     const ingredient = await Ingredient.findById(ledgerData.ingredientId).session(session);
 
     if (!ingredient) {
       throw new ApiError(httpStatus.NOT_FOUND, 'Ingredient not found');
     }
 
-    // Calculate new stock
     const newStock = ingredient.currentStock + ledgerData.quantity;
 
     if (newStock < 0) {
@@ -41,7 +67,6 @@ const createLedgerEntry = async (ledgerData) => {
       );
     }
 
-    // Create ledger entry
     const ledgerEntry = await InventoryLedger.create(
       [
         {
@@ -52,18 +77,13 @@ const createLedgerEntry = async (ledgerData) => {
       { session }
     );
 
-    // Update ingredient stock
     ingredient.currentStock = newStock;
     await ingredient.save({ session });
 
-    // Commit transaction
     await session.commitTransaction();
 
-    // Check for low stock alert (after transaction commits)
-    // Run asynchronously, don't wait for it
     stockAlertService.checkIngredientStock(ingredient.id).catch((err) => {
-      // eslint-disable-next-line no-console
-      console.error('Error checking stock alert:', err);
+      logger.error('Error checking stock alert:', err);
     });
 
     return {
@@ -79,11 +99,63 @@ const createLedgerEntry = async (ledgerData) => {
 };
 
 /**
- * Create multiple ledger entries in a single transaction
+ * Create ledger entry WITHOUT transaction (standalone MongoDB fallback)
+ */
+const createLedgerEntryWithoutTransaction = async (ledgerData) => {
+  const ingredient = await Ingredient.findById(ledgerData.ingredientId);
+
+  if (!ingredient) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Ingredient not found');
+  }
+
+  const newStock = ingredient.currentStock + ledgerData.quantity;
+
+  if (newStock < 0) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      `Insufficient stock for ${ingredient.name}. Current: ${ingredient.currentStock}, Required: ${Math.abs(
+        ledgerData.quantity
+      )}`
+    );
+  }
+
+  const ledgerEntry = await InventoryLedger.create({
+    ...ledgerData,
+    balanceAfter: newStock,
+  });
+
+  ingredient.currentStock = newStock;
+  await ingredient.save();
+
+  stockAlertService.checkIngredientStock(ingredient.id).catch((err) => {
+    logger.error('Error checking stock alert:', err);
+  });
+
+  return {
+    ledger: ledgerEntry,
+    ingredient,
+  };
+};
+
+/**
+ * Create multiple ledger entries
+ * Uses transaction if available (replica set), otherwise falls back to non-transactional
  * @param {Array} ledgerEntries - Array of ledger entry data
  * @returns {Promise<Array>}
  */
 const createBulkLedgerEntries = async (ledgerEntries) => {
+  const useTransaction = await supportsTransactions();
+
+  if (useTransaction) {
+    return createBulkLedgerEntriesWithTransaction(ledgerEntries);
+  }
+  return createBulkLedgerEntriesWithoutTransaction(ledgerEntries);
+};
+
+/**
+ * Create bulk ledger entries WITH transaction (replica set required)
+ */
+const createBulkLedgerEntriesWithTransaction = async (ledgerEntries) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -130,12 +202,9 @@ const createBulkLedgerEntries = async (ledgerEntries) => {
 
     await session.commitTransaction();
 
-    // Check for low stock alerts for all affected ingredients
-    // Run asynchronously, don't wait
     results.forEach((result) => {
       stockAlertService.checkIngredientStock(result.ingredient.id).catch((err) => {
-        // eslint-disable-next-line no-console
-        console.error('Error checking stock alert:', err);
+        logger.error('Error checking stock alert:', err);
       });
     });
 
@@ -146,6 +215,54 @@ const createBulkLedgerEntries = async (ledgerEntries) => {
   } finally {
     session.endSession();
   }
+};
+
+/**
+ * Create bulk ledger entries WITHOUT transaction (standalone MongoDB fallback)
+ */
+const createBulkLedgerEntriesWithoutTransaction = async (ledgerEntries) => {
+  const results = [];
+
+  // eslint-disable-next-line no-restricted-syntax
+  for (const ledgerData of ledgerEntries) {
+    const ingredient = await Ingredient.findById(ledgerData.ingredientId);
+
+    if (!ingredient) {
+      throw new ApiError(httpStatus.NOT_FOUND, `Ingredient not found: ${ledgerData.ingredientId}`);
+    }
+
+    const newStock = ingredient.currentStock + ledgerData.quantity;
+
+    if (newStock < 0) {
+      throw new ApiError(
+        httpStatus.BAD_REQUEST,
+        `Insufficient stock for ${ingredient.name}. Current: ${ingredient.currentStock}, Required: ${Math.abs(
+          ledgerData.quantity
+        )}`
+      );
+    }
+
+    const ledgerEntry = await InventoryLedger.create({
+      ...ledgerData,
+      balanceAfter: newStock,
+    });
+
+    ingredient.currentStock = newStock;
+    await ingredient.save();
+
+    results.push({
+      ledger: ledgerEntry,
+      ingredient,
+    });
+  }
+
+  results.forEach((result) => {
+    stockAlertService.checkIngredientStock(result.ingredient.id).catch((err) => {
+      logger.error('Error checking stock alert:', err);
+    });
+  });
+
+  return results;
 };
 
 /**

@@ -79,8 +79,16 @@ const updateOrderById = async (orderId, updateBody, userId) => {
   await order.save();
 
   // Emit events based on status changes
-  if (updateBody.status === ORDER_STATUS.COMPLETED && previousStatus !== ORDER_STATUS.COMPLETED) {
-    // Emit ORDER_COMPLETED event - inventory deduction will be handled by event handler
+  if (updateBody.status === ORDER_STATUS.READY && previousStatus !== ORDER_STATUS.READY) {
+    // Emit ORDER_READY event - inventory deduction will be handled by event handler
+    eventEmitter.emitEvent(EVENTS.ORDER_READY, {
+      orderId: orderId.toString(),
+      userId,
+      previousStatus,
+      order: order.toJSON(),
+    });
+  } else if (updateBody.status === ORDER_STATUS.COMPLETED && previousStatus !== ORDER_STATUS.COMPLETED) {
+    // Emit ORDER_COMPLETED event - invoice generation handled by event handler
     eventEmitter.emitEvent(EVENTS.ORDER_COMPLETED, {
       orderId: orderId.toString(),
       userId,

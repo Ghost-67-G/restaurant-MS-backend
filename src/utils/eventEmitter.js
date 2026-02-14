@@ -57,6 +57,7 @@ const EVENTS = {
   // Order events
   ORDER_CREATED: 'order:created',
   ORDER_UPDATED: 'order:updated',
+  ORDER_READY: 'order:ready',
   ORDER_COMPLETED: 'order:completed',
   ORDER_CANCELLED: 'order:cancelled',
   ORDER_VOIDED: 'order:voided',

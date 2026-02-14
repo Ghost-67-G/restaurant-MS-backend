@@ -71,6 +71,23 @@ const registerEventHandlers = () => {
     }
   });
 
+  eventEmitter.on(EVENTS.ORDER_READY, async (data) => {
+    const logId = await createEventLog(EVENTS.ORDER_READY, data);
+    try {
+      if (logId) {
+        await EventLog.findByIdAndUpdate(logId, {
+          status: 'processing',
+          processingStartedAt: new Date(),
+        });
+      }
+      await orderEvents.handleOrderReady(data);
+      await updateEventLog(logId, 'completed');
+    } catch (error) {
+      logger.error('Error in ORDER_READY handler:', error);
+      await updateEventLog(logId, 'failed', error.message);
+    }
+  });
+
   eventEmitter.on(EVENTS.ORDER_COMPLETED, async (data) => {
     const logId = await createEventLog(EVENTS.ORDER_COMPLETED, data);
     try {

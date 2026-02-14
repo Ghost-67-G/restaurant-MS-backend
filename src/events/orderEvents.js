@@ -6,18 +6,18 @@ const inventoryService = require('../services/inventory.service');
 const invoiceService = require('../services/invoice.service');
 
 /**
- * Handle inventory deduction when an order is completed
- * This decouples inventory logic from order controller
+ * Handle inventory deduction when an order is ready
+ * Ingredients are deducted at "ready" status (food is prepared)
  *
  * @param {Object} eventData - Event data
  * @param {string} eventData.orderId - Order ID
- * @param {string} eventData.userId - User who completed the order
+ * @param {string} eventData.userId - User who marked the order as ready
  */
-const handleOrderCompleted = async (eventData) => {
+const handleOrderReady = async (eventData) => {
   const { orderId, userId, previousStatus } = eventData;
 
   try {
-    logger.info(`Processing inventory deduction for completed order: ${orderId}`);
+    logger.info(`Processing inventory deduction for ready order: ${orderId}`);
 
     // Fetch the order
     const order = await Order.findById(orderId);
@@ -27,12 +27,13 @@ const handleOrderCompleted = async (eventData) => {
     }
 
     // Check if already processed (prevents double deduction)
-    if (previousStatus === 'completed') {
-      logger.warn(`Order ${orderId} already completed - skipping inventory deduction`);
+    if (previousStatus === 'ready') {
+      logger.warn(`Order ${orderId} already ready - skipping inventory deduction`);
       return;
     }
 
     // Process each item in the order
+    const deductionResults = [];
     const deductionPromises = order.items.map(async (item) => {
       try {
         // Get the menu item to find its linked inventory
@@ -42,26 +43,98 @@ const handleOrderCompleted = async (eventData) => {
         try {
           await recipeService.deductIngredientsForMenuItem(item.menuItemId, item.quantity, orderId, userId);
           logger.info(`Deducted ingredients for menu item ${item.menuItemId} using recipe system`);
-        } catch (error) {
+          deductionResults.push({ menuItemId: item.menuItemId, success: true, method: 'recipe' });
+        } catch (recipeError) {
           // If recipe-based deduction fails, fall back to old inventory system for backward compatibility
           if (menuItem && menuItem.inventoryItemId) {
             await inventoryService.reduceInventory(menuItem.inventoryItemId, item.quantity);
             logger.info(`Deducted inventory for menu item ${item.menuItemId} using legacy system`);
+            deductionResults.push({ menuItemId: item.menuItemId, success: true, method: 'legacy' });
           } else {
-            // Re-throw if no fallback available
-            throw error;
+            logger.warn(
+              `No recipe or inventory link for menu item ${item.menuItemId}: ${recipeError.message}. `
+                + `Please configure recipes for this menu item.`
+            );
+            deductionResults.push({ menuItemId: item.menuItemId, success: false, reason: recipeError.message });
           }
         }
       } catch (itemError) {
         logger.error(`Failed to deduct inventory for item ${item.menuItemId}:`, itemError);
-        throw itemError;
+        deductionResults.push({ menuItemId: item.menuItemId, success: false, reason: itemError.message });
       }
     });
 
     // Process all items in parallel
     await Promise.all(deductionPromises);
 
-    logger.info(`Successfully processed inventory deduction for order: ${orderId}`);
+    const failed = deductionResults.filter((r) => !r.success);
+    if (failed.length > 0) {
+      logger.warn(
+        `Inventory deduction partially failed for order ${orderId}: ${failed.length} items had no recipe configured`
+      );
+    }
+
+    logger.info(
+      `Processed inventory deduction for order: ${orderId} (${deductionResults.filter((r) => r.success).length}/${
+        deductionResults.length
+      } items)`
+    );
+  } catch (error) {
+    logger.error(`Error processing ORDER_READY event for order ${orderId}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Handle order completion - generate invoice
+ * Inventory was already deducted at "ready" status
+ *
+ * @param {Object} eventData - Event data
+ * @param {string} eventData.orderId - Order ID
+ * @param {string} eventData.userId - User who completed the order
+ */
+const handleOrderCompleted = async (eventData) => {
+  const { orderId, userId, previousStatus } = eventData;
+
+  try {
+    logger.info(`Processing order completion: ${orderId}`);
+
+    // Fetch the order
+    const order = await Order.findById(orderId);
+    if (!order) {
+      logger.error(`Order not found: ${orderId}`);
+      return;
+    }
+
+    // Check if already processed (prevents double processing)
+    if (previousStatus === 'completed') {
+      logger.warn(`Order ${orderId} already completed - skipping`);
+      return;
+    }
+
+    // If order went directly to completed (skipped ready), deduct inventory here
+    if (previousStatus !== 'ready') {
+      logger.info(`Order ${orderId} skipped ready status - deducting inventory now`);
+      const deductionPromises = order.items.map(async (item) => {
+        try {
+          const menuItem = await MenuItem.findById(item.menuItemId);
+          try {
+            await recipeService.deductIngredientsForMenuItem(item.menuItemId, item.quantity, orderId, userId);
+            logger.info(`Deducted ingredients for menu item ${item.menuItemId} using recipe system`);
+          } catch (recipeError) {
+            if (menuItem && menuItem.inventoryItemId) {
+              await inventoryService.reduceInventory(menuItem.inventoryItemId, item.quantity);
+              logger.info(`Deducted inventory for menu item ${item.menuItemId} using legacy system`);
+            } else {
+              logger.warn(`No recipe or inventory link for menu item ${item.menuItemId}: ${recipeError.message}`);
+            }
+          }
+        } catch (itemError) {
+          logger.error(`Failed to deduct inventory for item ${item.menuItemId}:`, itemError);
+        }
+      });
+      await Promise.all(deductionPromises);
+    }
 
     // Generate invoice for the completed order
     try {
@@ -70,17 +143,12 @@ const handleOrderCompleted = async (eventData) => {
     } catch (invoiceError) {
       // Don't fail the whole process if invoice generation fails
       logger.error(`Failed to generate invoice for order ${orderId}:`, invoiceError);
-      // Invoice can be generated manually later if needed
     }
+
+    logger.info(`Successfully processed order completion: ${orderId}`);
   } catch (error) {
     logger.error(`Error processing ORDER_COMPLETED event for order ${orderId}:`, error);
-    
-    // In production, you might want to:
-    // 1. Mark the order for manual review
-    // 2. Send alert to admins
-    // 3. Store in a dead-letter queue for retry
-    
-    throw error; // Re-throw to trigger any error handlers
+    throw error;
   }
 };
 
@@ -105,9 +173,9 @@ const handleOrderCancelled = async (eventData) => {
       return;
     }
 
-    // Only restore inventory if order was previously completed
-    if (previousStatus !== 'completed') {
-      logger.info(`Order ${orderId} was not completed - no inventory restoration needed`);
+    // Only restore inventory if order was previously ready or completed (inventory was deducted)
+    if (previousStatus !== 'completed' && previousStatus !== 'ready') {
+      logger.info(`Order ${orderId} was not ready/completed - no inventory restoration needed`);
       return;
     }
 
@@ -160,7 +228,7 @@ const handleOrderUpdated = async (eventData) => {
  * @param {boolean} eventData.isFullRefund - Whether this is a full refund
  */
 const handleOrderRefunded = async (eventData) => {
-  const { orderId, userId, amount, isFullRefund, reason } = eventData;
+  const { orderId, userId, isFullRefund, reason } = eventData;
 
   try {
     logger.info(`Processing inventory restoration for refunded order: ${orderId}`);
@@ -242,6 +310,7 @@ const handleOrderVoided = async (eventData) => {
 };
 
 module.exports = {
+  handleOrderReady,
   handleOrderCompleted,
   handleOrderCancelled,
   handleOrderCreated,
