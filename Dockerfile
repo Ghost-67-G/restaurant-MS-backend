@@ -8,9 +8,7 @@ COPY package.json yarn.lock* package-lock.json* ./
 
 USER node
 
-RUN if [ -f yarn.lock ]; then yarn install --frozen-lockfile --production; \
-    elif [ -f package-lock.json ]; then npm ci --only=production; \
-    else npm install --only=production; fi
+RUN npm ci --omit=dev --ignore-scripts
 
 COPY --chown=node:node . .
 
