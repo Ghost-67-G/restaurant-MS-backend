@@ -13,6 +13,7 @@
   "scripts": {
     "start": "pm2 start ecosystem.config.json --no-daemon",
     "dev": "env-cmd -f .env.development cross-env NODE_ENV=development nodemon src/index.js",
+    "seed": "env-cmd -f .env.development cross-env NODE_ENV=development node src/seeders/seed.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "prettier": "prettier --check **/*.js",
