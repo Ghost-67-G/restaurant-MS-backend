@@ -24,6 +24,28 @@ const orderItemSchema = mongoose.Schema({
     min: 1,
     default: 1,
   },
+  selectedModifiers: {
+    type: [
+      {
+        name: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        price: {
+          type: Number,
+          required: true,
+          min: 0,
+          default: 0,
+        },
+      },
+    ],
+    default: [],
+  },
+  itemNote: {
+    type: String,
+    trim: true,
+  },
 });
 
 const orderSchema = mongoose.Schema(
@@ -86,6 +108,10 @@ const orderSchema = mongoose.Schema(
       required: true,
     },
     tableNumber: {
+      type: String,
+      trim: true,
+    },
+    notes: {
       type: String,
       trim: true,
     },

@@ -69,6 +69,7 @@ const createInvoice = async (orderId, userId) => {
     totalAmount: order.totalAmount,
     orderType: order.orderType,
     tableNumber: order.tableNumber,
+    notes: order.notes,
     status: order.status,
     createdAt: order.createdAt,
     createdBy: order.createdBy

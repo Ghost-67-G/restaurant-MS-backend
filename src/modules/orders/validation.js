@@ -13,6 +13,13 @@ const createOrder = {
           name: Joi.string().required(),
           price: Joi.number().min(0).required(),
           quantity: Joi.number().integer().min(1).required(),
+          selectedModifiers: Joi.array().items(
+            Joi.object().keys({
+              name: Joi.string().trim().required(),
+              price: Joi.number().min(0).required(),
+            })
+          ),
+          itemNote: Joi.string().trim().allow('', null),
         })
       ),
     subtotal: Joi.number().min(0).required(),
@@ -28,6 +35,7 @@ const createOrder = {
       .valid(...Object.values(ORDER_TYPE))
       .required(),
     tableNumber: Joi.string().trim(),
+    notes: Joi.string().trim().allow('', null),
   }),
 };
 
