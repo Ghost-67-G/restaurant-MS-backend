@@ -5,7 +5,14 @@ const logger = require('./config/logger');
 const { registerEventHandlers } = require('./events');
 
 let server;
-mongoose.connect(config.mongoose.url, config.mongoose.options).then(() => {
+const mongooseOptions = {
+  ...config.mongoose.options,
+  serverSelectionTimeoutMS: 10000,
+};
+
+logger.info(`Connecting to MongoDB at ${config.mongoose.url}`);
+
+mongoose.connect(config.mongoose.url, mongooseOptions).then(() => {
   logger.info('Connected to MongoDB');
   
   // Register event handlers
@@ -14,6 +21,9 @@ mongoose.connect(config.mongoose.url, config.mongoose.options).then(() => {
   server = app.listen(config.port, () => {
     logger.info(`Listening to port ${config.port}`);
   });
+}).catch((error) => {
+  logger.error(`MongoDB connection failed: ${error.message}`);
+  process.exit(1);
 });
 
 const exitHandler = () => {
@@ -28,6 +38,9 @@ const exitHandler = () => {
 };
 
 const unexpectedErrorHandler = (error) => {
+  // Ensure crash reason is emitted even if logger formatting drops stack.
+  // eslint-disable-next-line no-console
+  console.error('Unexpected backend error:', error);
   logger.error(error);
   exitHandler();
 };
