@@ -5,7 +5,7 @@ const catchAsync = require('../../utils/catchAsync');
 const inventoryService = require('../../services/inventory.service');
 
 const createInventory = catchAsync(async (req, res) => {
-  const inventory = await inventoryService.createInventory(req.body);
+  const inventory = await inventoryService.createInventory(req.organizationId, req.body);
   res.status(httpStatus.CREATED).send(inventory);
 });
 
@@ -15,12 +15,12 @@ const getInventoryItems = catchAsync(async (req, res) => {
   if (filter.name) {
     filter.name = { $regex: filter.name, $options: 'i' };
   }
-  const result = await inventoryService.queryInventory(filter, options);
+  const result = await inventoryService.queryInventory(req.organizationId, filter, options);
   res.send(result);
 });
 
 const getInventory = catchAsync(async (req, res) => {
-  const inventory = await inventoryService.getInventoryById(req.params.inventoryId);
+  const inventory = await inventoryService.getInventoryById(req.organizationId, req.params.inventoryId);
   if (!inventory) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Inventory item not found');
   }
@@ -28,12 +28,17 @@ const getInventory = catchAsync(async (req, res) => {
 });
 
 const updateInventory = catchAsync(async (req, res) => {
-  const inventory = await inventoryService.updateInventoryById(req.params.inventoryId, req.body);
+  const inventory = await inventoryService.updateInventoryById(
+    req.organizationId,
+    req.params.inventoryId,
+    req.body,
+    req.user.id
+  );
   res.send(inventory);
 });
 
 const deleteInventory = catchAsync(async (req, res) => {
-  await inventoryService.deleteInventoryById(req.params.inventoryId);
+  await inventoryService.deleteInventoryById(req.organizationId, req.params.inventoryId);
   res.status(httpStatus.NO_CONTENT).send();
 });
 

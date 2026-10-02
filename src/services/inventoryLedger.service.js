@@ -1,10 +1,21 @@
-/* eslint-disable no-await-in-loop */
+/* eslint-disable no-await-in-loop, no-use-before-define */
 const httpStatus = require('http-status');
 const mongoose = require('mongoose');
-const { InventoryLedger, Ingredient } = require('../models');
+const { InventoryLedger, Inventory } = require('../models');
 const ApiError = require('../utils/ApiError');
 const stockAlertService = require('./stockAlert.service');
 const logger = require('../config/logger');
+const { validateOrganizationId, buildOrganizationFilter, safeFindOne } = require('../utils/organizationGuard');
+
+const normalizeLedgerEntry = (organizationId, ledgerData) => ({
+  ...ledgerData,
+  organizationId: validateOrganizationId(organizationId),
+});
+
+const normalizeLedgerEntries = (organizationId, ledgerEntries) => {
+  validateOrganizationId(organizationId);
+  return ledgerEntries.map((ledgerData) => normalizeLedgerEntry(organizationId, ledgerData));
+};
 
 /**
  * Check if MongoDB supports transactions (requires replica set)
@@ -15,55 +26,59 @@ const supportsTransactions = async () => {
     const admin = mongoose.connection.db.admin();
     const info = await admin.replSetGetStatus();
     return !!info;
-  } catch {
+  } catch (error) {
     return false;
   }
 };
 
 /**
- * Create a ledger entry and update ingredient stock
+ * Create a ledger entry and update inventory stock
  * Uses transaction if available (replica set), otherwise falls back to non-transactional
  * @param {Object} ledgerData - Ledger entry data
- * @param {ObjectId} ledgerData.ingredientId
- * @param {string} ledgerData.type - IN, OUT, WASTE, ADJUSTMENT
- * @param {number} ledgerData.quantity - Positive for IN, negative for OUT/WASTE
+ * @param {ObjectId} ledgerData.organizationId
+ * @param {ObjectId} ledgerData.inventoryId
+ * @param {ObjectId} ledgerData.itemId
+ * @param {string} ledgerData.type - IN, OUT, ADJUSTMENT
+ * @param {number} ledgerData.quantity - Positive for IN, negative for OUT/ADJUSTMENT
  * @param {string} ledgerData.reason
- * @param {string} ledgerData.referenceType - ORDER, PURCHASE, WASTE, MANUAL
+ * @param {string} ledgerData.referenceType - ORDER, PURCHASE, REFUND, MANUAL
  * @param {ObjectId} ledgerData.referenceId
  * @param {ObjectId} ledgerData.createdBy
- * @returns {Promise<{ledger: InventoryLedger, ingredient: Ingredient}>}
+ * @returns {Promise<{ledger: InventoryLedger, inventory: Inventory}>}
  */
-const createLedgerEntry = async (ledgerData) => {
+async function createLedgerEntry(organizationId, ledgerData) {
+  const scopedLedgerData = normalizeLedgerEntry(organizationId, ledgerData);
   const useTransaction = await supportsTransactions();
 
   if (useTransaction) {
-    return createLedgerEntryWithTransaction(ledgerData);
+    return createLedgerEntryWithTransaction(scopedLedgerData);
   }
-  return createLedgerEntryWithoutTransaction(ledgerData);
-};
+  return createLedgerEntryWithoutTransaction(scopedLedgerData);
+}
 
 /**
  * Create ledger entry WITH MongoDB transaction (replica set required)
  */
-const createLedgerEntryWithTransaction = async (ledgerData) => {
+async function createLedgerEntryWithTransaction(ledgerData) {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const ingredient = await Ingredient.findById(ledgerData.ingredientId).session(session);
+    const inventory = await Inventory.findOne({
+      _id: ledgerData.inventoryId,
+      organizationId: ledgerData.organizationId,
+    }).session(session);
 
-    if (!ingredient) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'Ingredient not found');
+    if (!inventory) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Inventory record not found');
     }
 
-    const newStock = ingredient.currentStock + ledgerData.quantity;
+    const newStock = inventory.quantity + ledgerData.quantity;
 
-    if (newStock < 0) {
+    if (newStock < 0 && !inventory.allowNegativeStock) {
       throw new ApiError(
         httpStatus.BAD_REQUEST,
-        `Insufficient stock for ${ingredient.name}. Current: ${ingredient.currentStock}, Required: ${Math.abs(
-          ledgerData.quantity
-        )}`
+        `Insufficient stock. Current: ${inventory.quantity}, Required: ${Math.abs(ledgerData.quantity)}`
       );
     }
 
@@ -71,24 +86,25 @@ const createLedgerEntryWithTransaction = async (ledgerData) => {
       [
         {
           ...ledgerData,
+          itemId: ledgerData.itemId || inventory.itemId,
           balanceAfter: newStock,
         },
       ],
       { session }
     );
 
-    ingredient.currentStock = newStock;
-    await ingredient.save({ session });
+    inventory.quantity = newStock;
+    await inventory.save({ session });
 
     await session.commitTransaction();
 
-    stockAlertService.checkIngredientStock(ingredient.id).catch((err) => {
+    stockAlertService.checkInventoryStock(ledgerData.organizationId, inventory.id).catch((err) => {
       logger.error('Error checking stock alert:', err);
     });
 
     return {
       ledger: ledgerEntry[0],
-      ingredient,
+      inventory,
     };
   } catch (error) {
     await session.abortTransaction();
@@ -96,46 +112,48 @@ const createLedgerEntryWithTransaction = async (ledgerData) => {
   } finally {
     session.endSession();
   }
-};
+}
 
 /**
  * Create ledger entry WITHOUT transaction (standalone MongoDB fallback)
  */
-const createLedgerEntryWithoutTransaction = async (ledgerData) => {
-  const ingredient = await Ingredient.findById(ledgerData.ingredientId);
+async function createLedgerEntryWithoutTransaction(ledgerData) {
+  const inventory = await Inventory.findOne({
+    _id: ledgerData.inventoryId,
+    organizationId: ledgerData.organizationId,
+  });
 
-  if (!ingredient) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Ingredient not found');
+  if (!inventory) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Inventory record not found');
   }
 
-  const newStock = ingredient.currentStock + ledgerData.quantity;
+  const newStock = inventory.quantity + ledgerData.quantity;
 
-  if (newStock < 0) {
+  if (newStock < 0 && !inventory.allowNegativeStock) {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
-      `Insufficient stock for ${ingredient.name}. Current: ${ingredient.currentStock}, Required: ${Math.abs(
-        ledgerData.quantity
-      )}`
+      `Insufficient stock. Current: ${inventory.quantity}, Required: ${Math.abs(ledgerData.quantity)}`
     );
   }
 
   const ledgerEntry = await InventoryLedger.create({
     ...ledgerData,
+    itemId: ledgerData.itemId || inventory.itemId,
     balanceAfter: newStock,
   });
 
-  ingredient.currentStock = newStock;
-  await ingredient.save();
+  inventory.quantity = newStock;
+  await inventory.save();
 
-  stockAlertService.checkIngredientStock(ingredient.id).catch((err) => {
+  stockAlertService.checkInventoryStock(ledgerData.organizationId, inventory.id).catch((err) => {
     logger.error('Error checking stock alert:', err);
   });
 
   return {
     ledger: ledgerEntry,
-    ingredient,
+    inventory,
   };
-};
+}
 
 /**
  * Create multiple ledger entries
@@ -143,19 +161,20 @@ const createLedgerEntryWithoutTransaction = async (ledgerData) => {
  * @param {Array} ledgerEntries - Array of ledger entry data
  * @returns {Promise<Array>}
  */
-const createBulkLedgerEntries = async (ledgerEntries) => {
+async function createBulkLedgerEntries(organizationId, ledgerEntries) {
+  const scopedLedgerEntries = normalizeLedgerEntries(organizationId, ledgerEntries);
   const useTransaction = await supportsTransactions();
 
   if (useTransaction) {
-    return createBulkLedgerEntriesWithTransaction(ledgerEntries);
+    return createBulkLedgerEntriesWithTransaction(scopedLedgerEntries);
   }
-  return createBulkLedgerEntriesWithoutTransaction(ledgerEntries);
-};
+  return createBulkLedgerEntriesWithoutTransaction(scopedLedgerEntries);
+}
 
 /**
  * Create bulk ledger entries WITH transaction (replica set required)
  */
-const createBulkLedgerEntriesWithTransaction = async (ledgerEntries) => {
+async function createBulkLedgerEntriesWithTransaction(ledgerEntries) {
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -164,20 +183,21 @@ const createBulkLedgerEntriesWithTransaction = async (ledgerEntries) => {
 
     // eslint-disable-next-line no-restricted-syntax
     for (const ledgerData of ledgerEntries) {
-      const ingredient = await Ingredient.findById(ledgerData.ingredientId).session(session);
+      const inventory = await Inventory.findOne({
+        _id: ledgerData.inventoryId,
+        organizationId: ledgerData.organizationId,
+      }).session(session);
 
-      if (!ingredient) {
-        throw new ApiError(httpStatus.NOT_FOUND, `Ingredient not found: ${ledgerData.ingredientId}`);
+      if (!inventory) {
+        throw new ApiError(httpStatus.NOT_FOUND, `Inventory record not found: ${ledgerData.inventoryId}`);
       }
 
-      const newStock = ingredient.currentStock + ledgerData.quantity;
+      const newStock = inventory.quantity + ledgerData.quantity;
 
-      if (newStock < 0) {
+      if (newStock < 0 && !inventory.allowNegativeStock) {
         throw new ApiError(
           httpStatus.BAD_REQUEST,
-          `Insufficient stock for ${ingredient.name}. Current: ${ingredient.currentStock}, Required: ${Math.abs(
-            ledgerData.quantity
-          )}`
+          `Insufficient stock. Current: ${inventory.quantity}, Required: ${Math.abs(ledgerData.quantity)}`
         );
       }
 
@@ -185,25 +205,26 @@ const createBulkLedgerEntriesWithTransaction = async (ledgerEntries) => {
         [
           {
             ...ledgerData,
+            itemId: ledgerData.itemId || inventory.itemId,
             balanceAfter: newStock,
           },
         ],
         { session }
       );
 
-      ingredient.currentStock = newStock;
-      await ingredient.save({ session });
+      inventory.quantity = newStock;
+      await inventory.save({ session });
 
       results.push({
         ledger: ledgerEntry[0],
-        ingredient,
+        inventory,
       });
     }
 
     await session.commitTransaction();
 
     results.forEach((result) => {
-      stockAlertService.checkIngredientStock(result.ingredient.id).catch((err) => {
+      stockAlertService.checkInventoryStock(ledgerEntries[0].organizationId, result.inventory.id).catch((err) => {
         logger.error('Error checking stock alert:', err);
       });
     });
@@ -215,55 +236,57 @@ const createBulkLedgerEntriesWithTransaction = async (ledgerEntries) => {
   } finally {
     session.endSession();
   }
-};
+}
 
 /**
  * Create bulk ledger entries WITHOUT transaction (standalone MongoDB fallback)
  */
-const createBulkLedgerEntriesWithoutTransaction = async (ledgerEntries) => {
+async function createBulkLedgerEntriesWithoutTransaction(ledgerEntries) {
   const results = [];
 
   // eslint-disable-next-line no-restricted-syntax
   for (const ledgerData of ledgerEntries) {
-    const ingredient = await Ingredient.findById(ledgerData.ingredientId);
+    const inventory = await Inventory.findOne({
+      _id: ledgerData.inventoryId,
+      organizationId: ledgerData.organizationId,
+    });
 
-    if (!ingredient) {
-      throw new ApiError(httpStatus.NOT_FOUND, `Ingredient not found: ${ledgerData.ingredientId}`);
+    if (!inventory) {
+      throw new ApiError(httpStatus.NOT_FOUND, `Inventory record not found: ${ledgerData.inventoryId}`);
     }
 
-    const newStock = ingredient.currentStock + ledgerData.quantity;
+    const newStock = inventory.quantity + ledgerData.quantity;
 
-    if (newStock < 0) {
+    if (newStock < 0 && !inventory.allowNegativeStock) {
       throw new ApiError(
         httpStatus.BAD_REQUEST,
-        `Insufficient stock for ${ingredient.name}. Current: ${ingredient.currentStock}, Required: ${Math.abs(
-          ledgerData.quantity
-        )}`
+        `Insufficient stock. Current: ${inventory.quantity}, Required: ${Math.abs(ledgerData.quantity)}`
       );
     }
 
     const ledgerEntry = await InventoryLedger.create({
       ...ledgerData,
+      itemId: ledgerData.itemId || inventory.itemId,
       balanceAfter: newStock,
     });
 
-    ingredient.currentStock = newStock;
-    await ingredient.save();
+    inventory.quantity = newStock;
+    await inventory.save();
 
     results.push({
       ledger: ledgerEntry,
-      ingredient,
+      inventory,
     });
   }
 
   results.forEach((result) => {
-    stockAlertService.checkIngredientStock(result.ingredient.id).catch((err) => {
+    stockAlertService.checkInventoryStock(ledgerEntries[0].organizationId, result.inventory.id).catch((err) => {
       logger.error('Error checking stock alert:', err);
     });
   });
 
   return results;
-};
+}
 
 /**
  * Query ledger entries
@@ -271,22 +294,24 @@ const createBulkLedgerEntriesWithoutTransaction = async (ledgerEntries) => {
  * @param {Object} options - Query options
  * @returns {Promise<QueryResult>}
  */
-const queryLedgerEntries = async (filter, options) => {
-  const ledgerEntries = await InventoryLedger.paginate(filter, {
+const queryLedgerEntries = async (organizationId, filter, options) => {
+  validateOrganizationId(organizationId);
+  const ledgerEntries = await InventoryLedger.paginate(buildOrganizationFilter(organizationId, filter), {
     ...options,
-    populate: 'ingredientId createdBy',
+    populate: 'inventoryId itemId createdBy',
   });
   return ledgerEntries;
 };
 
 /**
- * Get ledger entries for a specific ingredient
- * @param {ObjectId} ingredientId
+ * Get ledger entries for a specific inventory record
+ * @param {ObjectId} inventoryId
  * @param {Object} options - Query options
  * @returns {Promise<QueryResult>}
  */
-const getLedgerByIngredient = async (ingredientId, options = {}) => {
-  return queryLedgerEntries({ ingredientId }, { ...options, sortBy: 'createdAt:desc' });
+const getLedgerByInventory = async (organizationId, inventoryId, options = {}) => {
+  validateOrganizationId(organizationId);
+  return queryLedgerEntries(organizationId, { inventoryId }, { ...options, sortBy: 'createdAt:desc' });
 };
 
 /**
@@ -294,19 +319,24 @@ const getLedgerByIngredient = async (ingredientId, options = {}) => {
  * @param {ObjectId} id
  * @returns {Promise<InventoryLedger>}
  */
-const getLedgerEntryById = async (id) => {
-  return InventoryLedger.findById(id).populate('ingredientId createdBy');
+const getLedgerEntryById = async (organizationId, id) => {
+  validateOrganizationId(organizationId);
+  return safeFindOne(InventoryLedger, organizationId, { _id: id }).populate('inventoryId itemId createdBy');
 };
 
 /**
- * Get ledger statistics for an ingredient
- * @param {ObjectId} ingredientId
+ * Get ledger statistics for an inventory record
+ * @param {ObjectId} inventoryId
  * @param {Date} startDate
  * @param {Date} endDate
  * @returns {Promise<Object>}
  */
-const getLedgerStats = async (ingredientId, startDate, endDate) => {
-  const match = { ingredientId: new mongoose.Types.ObjectId(ingredientId) };
+const getLedgerStats = async (organizationId, inventoryId, startDate, endDate) => {
+  validateOrganizationId(organizationId);
+  const match = {
+    organizationId: new mongoose.Types.ObjectId(organizationId),
+    inventoryId: new mongoose.Types.ObjectId(inventoryId),
+  };
 
   if (startDate || endDate) {
     match.createdAt = {};
@@ -332,7 +362,7 @@ module.exports = {
   createLedgerEntry,
   createBulkLedgerEntries,
   queryLedgerEntries,
-  getLedgerByIngredient,
+  getLedgerByInventory,
   getLedgerEntryById,
   getLedgerStats,
 };

@@ -4,7 +4,8 @@ const { objectId } = require('../../validations/custom.validation');
 const getAlerts = {
   query: Joi.object().keys({
     status: Joi.string().valid('PENDING', 'ACKNOWLEDGED'),
-    ingredientId: Joi.string().custom(objectId),
+    inventoryId: Joi.string().custom(objectId),
+    itemId: Joi.string().custom(objectId),
     sortBy: Joi.string(),
     limit: Joi.number().integer(),
     page: Joi.number().integer(),
@@ -13,7 +14,8 @@ const getAlerts = {
 
 const getActiveAlerts = {
   query: Joi.object().keys({
-    ingredientId: Joi.string().custom(objectId),
+    inventoryId: Joi.string().custom(objectId),
+    itemId: Joi.string().custom(objectId),
     sortBy: Joi.string(),
     limit: Joi.number().integer(),
     page: Joi.number().integer(),

@@ -1,18 +1,30 @@
 const mongoose = require('mongoose');
-const { toJSON, paginate } = require('./plugins');
+const { toJSON, paginate, organizationGuard } = require('./plugins');
 
 const inventoryLedgerSchema = mongoose.Schema(
   {
-    ingredientId: {
+    organizationId: {
       type: mongoose.SchemaTypes.ObjectId,
-      ref: 'Ingredient',
+      ref: 'Organization',
+      required: true,
+      index: true,
+    },
+    inventoryId: {
+      type: mongoose.SchemaTypes.ObjectId,
+      ref: 'Inventory',
+      required: true,
+      index: true,
+    },
+    itemId: {
+      type: mongoose.SchemaTypes.ObjectId,
+      ref: 'Item',
       required: true,
       index: true,
     },
     type: {
       type: String,
       required: true,
-      enum: ['IN', 'OUT', 'WASTE', 'ADJUSTMENT'],
+      enum: ['IN', 'OUT', 'ADJUSTMENT'],
       index: true,
     },
     quantity: {
@@ -27,7 +39,7 @@ const inventoryLedgerSchema = mongoose.Schema(
     referenceType: {
       type: String,
       required: true,
-      enum: ['ORDER', 'PURCHASE', 'WASTE', 'MANUAL'],
+      enum: ['ORDER', 'PURCHASE', 'REFUND', 'MANUAL'],
     },
     referenceId: {
       type: mongoose.SchemaTypes.ObjectId,
@@ -51,9 +63,11 @@ const inventoryLedgerSchema = mongoose.Schema(
 // Add plugins
 inventoryLedgerSchema.plugin(toJSON);
 inventoryLedgerSchema.plugin(paginate);
+inventoryLedgerSchema.plugin(organizationGuard);
 
 // Compound index for efficient queries
-inventoryLedgerSchema.index({ ingredientId: 1, createdAt: -1 });
+inventoryLedgerSchema.index({ organizationId: 1, inventoryId: 1, createdAt: -1 });
+inventoryLedgerSchema.index({ organizationId: 1, itemId: 1, createdAt: -1 });
 inventoryLedgerSchema.index({ referenceType: 1, referenceId: 1 });
 
 /**

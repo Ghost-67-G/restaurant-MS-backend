@@ -1,11 +1,11 @@
 const mongoose = require('mongoose');
-const { toJSON, paginate } = require('./plugins');
-const { ORDER_STATUS, ORDER_TYPE } = require('../config/constants');
+const { toJSON, paginate, organizationGuard } = require('./plugins');
+const { ORDER_STATUS, PAYMENT_METHOD } = require('../config/constants');
 
 const orderItemSchema = mongoose.Schema({
-  menuItemId: {
+  itemId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'MenuItem',
+    ref: 'Item',
     required: true,
   },
   name: {
@@ -13,7 +13,11 @@ const orderItemSchema = mongoose.Schema({
     required: true,
     trim: true,
   },
-  price: {
+  sku: {
+    type: String,
+    trim: true,
+  },
+  unitPrice: {
     type: Number,
     required: true,
     min: 0,
@@ -24,7 +28,7 @@ const orderItemSchema = mongoose.Schema({
     min: 1,
     default: 1,
   },
-  selectedModifiers: {
+  selectedOptions: {
     type: [
       {
         name: {
@@ -32,17 +36,26 @@ const orderItemSchema = mongoose.Schema({
           required: true,
           trim: true,
         },
-        price: {
+        priceAdjustment: {
           type: Number,
           required: true,
-          min: 0,
           default: 0,
         },
       },
     ],
     default: [],
   },
-  itemNote: {
+  discountAmount: {
+    type: Number,
+    min: 0,
+    default: 0,
+  },
+  lineTotal: {
+    type: Number,
+    required: true,
+    min: 0,
+  },
+  note: {
     type: String,
     trim: true,
   },
@@ -50,6 +63,12 @@ const orderItemSchema = mongoose.Schema({
 
 const orderSchema = mongoose.Schema(
   {
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Organization',
+      required: true,
+      index: true,
+    },
     items: {
       type: [orderItemSchema],
       required: true,
@@ -102,14 +121,10 @@ const orderSchema = mongoose.Schema(
       required: true,
       min: 0,
     },
-    orderType: {
+    paymentMethod: {
       type: String,
-      enum: Object.values(ORDER_TYPE),
+      enum: Object.values(PAYMENT_METHOD),
       required: true,
-    },
-    tableNumber: {
-      type: String,
-      trim: true,
     },
     notes: {
       type: String,
@@ -147,6 +162,10 @@ const orderSchema = mongoose.Schema(
 // add plugin that converts mongoose to json
 orderSchema.plugin(toJSON);
 orderSchema.plugin(paginate);
+orderSchema.plugin(organizationGuard);
+
+orderSchema.index({ organizationId: 1, createdAt: -1 });
+orderSchema.index({ organizationId: 1, status: 1, createdAt: -1 });
 
 /**
  * @typedef Order

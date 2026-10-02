@@ -48,7 +48,9 @@ module.exports = router;
  *             type: object
  *             required:
  *               - items
+ *               - subtotal
  *               - totalAmount
+ *               - paymentMethod
  *             properties:
  *               items:
  *                 type: array
@@ -56,40 +58,93 @@ module.exports = router;
  *                 items:
  *                   type: object
  *                   required:
- *                     - menuItemId
+ *                     - itemId
  *                     - name
- *                     - price
+ *                     - unitPrice
  *                     - quantity
+ *                     - lineTotal
  *                   properties:
- *                     menuItemId:
+ *                     itemId:
  *                       type: string
- *                       description: Menu item ID reference
+ *                       description: Item ID reference
  *                     name:
  *                       type: string
- *                       description: Snapshot of menu item name
- *                     price:
+ *                       description: Snapshot of item name
+ *                     sku:
+ *                       type: string
+ *                       description: Snapshot of item SKU
+ *                     unitPrice:
  *                       type: number
  *                       minimum: 0
- *                       description: Snapshot of menu item price
+ *                       description: Snapshot of item unit price
  *                     quantity:
  *                       type: number
  *                       minimum: 1
- *                       description: Quantity ordered
+ *                     lineTotal:
+ *                       type: number
+ *                       minimum: 0
+ *                     discountAmount:
+ *                       type: number
+ *                       minimum: 0
+ *                     selectedOptions:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           name:
+ *                             type: string
+ *                           priceAdjustment:
+ *                             type: number
+ *                     note:
+ *                       type: string
+ *               subtotal:
+ *                 type: number
+ *                 minimum: 0
+ *               discountType:
+ *                 type: string
+ *                 enum: [PERCENTAGE, FLAT]
+ *               discountValue:
+ *                 type: number
+ *                 minimum: 0
+ *               discountAmount:
+ *                 type: number
+ *                 minimum: 0
+ *               taxName:
+ *                 type: string
+ *               taxPercentage:
+ *                 type: number
+ *                 minimum: 0
+ *               taxAmount:
+ *                 type: number
+ *                 minimum: 0
+ *               paymentMethod:
+ *                 type: string
+ *                 enum: [cash, card]
  *               totalAmount:
  *                 type: number
  *                 minimum: 0
- *                 description: Total order amount (from frontend)
+ *               notes:
+ *                 type: string
  *             example:
  *               items:
- *                 - menuItemId: 5ebac534954b54139806c112
- *                   name: Margherita Pizza
- *                   price: 12.99
+ *                 - itemId: 5ebac534954b54139806c112
+ *                   name: Wireless Mouse
+ *                   sku: WM-100
+ *                   unitPrice: 24.99
  *                   quantity: 2
- *                 - menuItemId: 5ebac534954b54139806c113
- *                   name: Coke
- *                   price: 2.50
+ *                   lineTotal: 49.98
+ *                 - itemId: 5ebac534954b54139806c113
+ *                   name: Notebook A5
+ *                   sku: NB-A5
+ *                   unitPrice: 5.99
  *                   quantity: 1
- *               totalAmount: 28.48
+ *                   lineTotal: 5.99
+ *               subtotal: 55.97
+ *               taxName: Standard Sales Tax
+ *               taxPercentage: 12
+ *               taxAmount: 6.72
+ *               paymentMethod: card
+ *               totalAmount: 62.69
  *     responses:
  *       "201":
  *         description: Created
@@ -113,8 +168,14 @@ module.exports = router;
  *         name: status
  *         schema:
  *           type: string
- *           enum: [pending, completed]
+ *           enum: [pending, completed, cancelled, voided, refunded]
  *         description: Filter by order status
+ *       - in: query
+ *         name: paymentMethod
+ *         schema:
+ *           type: string
+ *           enum: [cash, card]
+ *         description: Filter by payment method
  *       - in: query
  *         name: createdBy
  *         schema:
@@ -221,7 +282,7 @@ module.exports = router;
  *             properties:
  *               status:
  *                 type: string
- *                 enum: [pending, completed]
+ *                 enum: [pending, completed, cancelled, voided, refunded]
  *             example:
  *               status: completed
  *     responses:

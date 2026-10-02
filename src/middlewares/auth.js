@@ -2,6 +2,7 @@ const passport = require('passport');
 const httpStatus = require('http-status');
 const ApiError = require('../utils/ApiError');
 const { roleRights } = require('../config/roles');
+const { resolveOrganizationId } = require('./attachOrganization');
 
 const verifyCallback = (req, resolve, reject, requiredRights) => async (err, user, info) => {
   if (err || info || !user) {
@@ -22,6 +23,13 @@ const verifyCallback = (req, resolve, reject, requiredRights) => async (err, use
       return reject(new ApiError(httpStatus.FORBIDDEN, `Forbidden: Missing required permission`));
     }
   }
+
+  const organizationId = resolveOrganizationId(req);
+  if (!organizationId) {
+    return reject(new ApiError(httpStatus.UNAUTHORIZED, 'Organization context missing in token'));
+  }
+
+  req.organizationId = organizationId;
 
   resolve();
 };

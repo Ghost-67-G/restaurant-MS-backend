@@ -1,8 +1,14 @@
 const mongoose = require('mongoose');
-const { toJSON, paginate } = require('./plugins');
+const { toJSON, paginate, organizationGuard } = require('./plugins');
 
 const invoiceSchema = mongoose.Schema(
   {
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Organization',
+      required: true,
+      index: true,
+    },
     orderId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Order',
@@ -38,9 +44,11 @@ const invoiceSchema = mongoose.Schema(
 // Add plugins
 invoiceSchema.plugin(toJSON);
 invoiceSchema.plugin(paginate);
+invoiceSchema.plugin(organizationGuard);
 
 // Indexes for queries
 invoiceSchema.index({ invoiceNumber: 1 });
+invoiceSchema.index({ organizationId: 1, invoiceNumber: 1 });
 invoiceSchema.index({ orderId: 1 });
 invoiceSchema.index({ createdAt: -1 });
 

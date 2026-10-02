@@ -3,27 +3,31 @@ const Order = require('../models/order.model');
 const { ORDER_STATUS } = require('../config/constants');
 const { eventEmitter, EVENTS } = require('../utils/eventEmitter');
 const ApiError = require('../utils/ApiError');
+const { validateOrganizationId, buildOrganizationFilter, safeFindOne } = require('../utils/organizationGuard');
 
 /**
  * Create an order
  * @param {Object} orderBody
- * @param {ObjectId} userId
+ * @param {Object} user
  * @returns {Promise<Order>}
  */
-const createOrder = async (orderBody, userId) => {
+const createOrder = async (organizationId, orderBody, user) => {
+  const normalizedOrganizationId = validateOrganizationId(organizationId);
   const orderData = {
     ...orderBody,
-    createdBy: userId,
+    organizationId: normalizedOrganizationId,
+    createdBy: user.id,
   };
   const order = await Order.create(orderData);
-  
+
   // Emit event for analytics/notifications
   eventEmitter.emitEvent(EVENTS.ORDER_CREATED, {
+    organizationId: normalizedOrganizationId,
     orderId: order._id.toString(),
-    userId,
+    userId: user.id,
     orderData,
   });
-  
+
   return order;
 };
 
@@ -36,8 +40,9 @@ const createOrder = async (orderBody, userId) => {
  * @param {number} [options.page] - Current page (default = 1)
  * @returns {Promise<QueryResult>}
  */
-const queryOrders = async (filter, options) => {
-  const orders = await Order.paginate(filter, options);
+const queryOrders = async (organizationId, filter, options) => {
+  validateOrganizationId(organizationId);
+  const orders = await Order.paginate(buildOrganizationFilter(organizationId, filter), options);
   return orders;
 };
 
@@ -46,29 +51,34 @@ const queryOrders = async (filter, options) => {
  * @param {ObjectId} id
  * @returns {Promise<Order>}
  */
-const getOrderById = async (id) => {
-  return Order.findById(id).populate('createdBy', 'name email');
+const getOrderById = async (organizationId, id) => {
+  validateOrganizationId(organizationId);
+  return safeFindOne(Order, organizationId, { _id: id }).populate('createdBy', 'name email');
 };
 
 /**
  * Update order by id
  * @param {ObjectId} orderId
  * @param {Object} updateBody
- * @param {ObjectId} userId - User updating the order
+ * @param {Object} user - User updating the order
  * @returns {Promise<Order>}
  */
-const updateOrderById = async (orderId, updateBody, userId) => {
-  const order = await getOrderById(orderId);
+const updateOrderById = async (organizationId, orderId, updateBody, user) => {
+  const normalizedOrganizationId = validateOrganizationId(organizationId);
+  const order = await getOrderById(normalizedOrganizationId, orderId);
   if (!order) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Order not found');
   }
 
   // Prevent updating cancelled or completed orders
-  if (order.status === ORDER_STATUS.CANCELLED) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot update cancelled order');
+  if ([ORDER_STATUS.CANCELLED, ORDER_STATUS.VOIDED].includes(order.status)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot update cancelled or voided order');
   }
-  if (order.status === ORDER_STATUS.COMPLETED && updateBody.status !== ORDER_STATUS.CANCELLED) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot update completed order');
+  if (
+    [ORDER_STATUS.COMPLETED, ORDER_STATUS.REFUNDED].includes(order.status) &&
+    updateBody.status !== ORDER_STATUS.CANCELLED
+  ) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot update completed or refunded order');
   }
 
   // Store previous status for event handlers
@@ -79,35 +89,28 @@ const updateOrderById = async (orderId, updateBody, userId) => {
   await order.save();
 
   // Emit events based on status changes
-  if (updateBody.status === ORDER_STATUS.READY && previousStatus !== ORDER_STATUS.READY) {
-    // Emit ORDER_READY event - inventory deduction will be handled by event handler
-    eventEmitter.emitEvent(EVENTS.ORDER_READY, {
-      orderId: orderId.toString(),
-      userId,
-      previousStatus,
-      order: order.toJSON(),
-    });
-  } else if (updateBody.status === ORDER_STATUS.COMPLETED && previousStatus !== ORDER_STATUS.COMPLETED) {
+  if (updateBody.status === ORDER_STATUS.COMPLETED && previousStatus !== ORDER_STATUS.COMPLETED) {
     // Emit ORDER_COMPLETED event - invoice generation handled by event handler
     eventEmitter.emitEvent(EVENTS.ORDER_COMPLETED, {
+      organizationId: normalizedOrganizationId,
       orderId: orderId.toString(),
-      userId,
+      userId: user.id,
       previousStatus,
       order: order.toJSON(),
     });
   } else if (updateBody.status === ORDER_STATUS.CANCELLED && previousStatus !== ORDER_STATUS.CANCELLED) {
-    // Emit ORDER_CANCELLED event - inventory restoration (if needed) handled by event handler
     eventEmitter.emitEvent(EVENTS.ORDER_CANCELLED, {
+      organizationId: normalizedOrganizationId,
       orderId: orderId.toString(),
-      userId,
+      userId: user.id,
       previousStatus,
       order: order.toJSON(),
     });
   } else {
-    // Generic update event
     eventEmitter.emitEvent(EVENTS.ORDER_UPDATED, {
+      organizationId: normalizedOrganizationId,
       orderId: orderId.toString(),
-      userId,
+      userId: user.id,
       status: order.status,
       previousStatus,
     });
@@ -121,8 +124,9 @@ const updateOrderById = async (orderId, updateBody, userId) => {
  * @param {ObjectId} orderId
  * @returns {Promise<Order>}
  */
-const cancelOrderById = async (orderId) => {
-  const order = await getOrderById(orderId);
+const cancelOrderById = async (organizationId, orderId, user) => {
+  const normalizedOrganizationId = validateOrganizationId(organizationId);
+  const order = await getOrderById(normalizedOrganizationId, orderId);
   if (!order) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Order not found');
   }
@@ -143,7 +147,9 @@ const cancelOrderById = async (orderId) => {
 
   // Emit ORDER_CANCELLED event
   eventEmitter.emitEvent(EVENTS.ORDER_CANCELLED, {
+    organizationId: normalizedOrganizationId,
     orderId: orderId.toString(),
+    userId: user.id,
     previousStatus,
     order: order.toJSON(),
   });
@@ -156,22 +162,18 @@ const cancelOrderById = async (orderId) => {
  * @param {ObjectId} orderId
  * @returns {Promise<Order>}
  */
-const deleteOrderById = async (orderId) => {
-  const order = await getOrderById(orderId);
+const deleteOrderById = async (orderId, organizationId) => {
+  validateOrganizationId(organizationId);
+  const order = await getOrderById(organizationId, orderId);
   if (!order) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Order not found');
   }
 
-  // Prevent deleting completed orders - use refund/void instead
-  if (order.status === ORDER_STATUS.COMPLETED) {
-    throw new ApiError(
-      httpStatus.BAD_REQUEST,
-      'Cannot delete completed orders. Use refund or void instead.'
-    );
+  if ([ORDER_STATUS.COMPLETED, ORDER_STATUS.REFUNDED].includes(order.status)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot delete completed orders. Use refund or void instead.');
   }
 
-  // Prevent deleting refunded orders
-  if (order.isRefunded || order.refundedAmount > 0) {
+  if (order.isRefunded || order.refundedAmount > 0 || order.isVoided) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot delete orders with refunds');
   }
 

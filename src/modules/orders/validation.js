@@ -1,6 +1,6 @@
 const Joi = require('joi');
 const { objectId } = require('../../validations/custom.validation');
-const { ORDER_STATUS, ORDER_TYPE, DISCOUNT_TYPE } = require('../../config/constants');
+const { ORDER_STATUS, DISCOUNT_TYPE, PAYMENT_METHOD } = require('../../config/constants');
 
 const createOrder = {
   body: Joi.object().keys({
@@ -9,17 +9,20 @@ const createOrder = {
       .required()
       .items(
         Joi.object().keys({
-          menuItemId: Joi.string().custom(objectId).required(),
+          itemId: Joi.string().custom(objectId).required(),
           name: Joi.string().required(),
-          price: Joi.number().min(0).required(),
+          sku: Joi.string().trim().allow('', null),
+          unitPrice: Joi.number().min(0).required(),
           quantity: Joi.number().integer().min(1).required(),
-          selectedModifiers: Joi.array().items(
+          selectedOptions: Joi.array().items(
             Joi.object().keys({
               name: Joi.string().trim().required(),
-              price: Joi.number().min(0).required(),
+              priceAdjustment: Joi.number().required(),
             })
           ),
-          itemNote: Joi.string().trim().allow('', null),
+          discountAmount: Joi.number().min(0).default(0),
+          lineTotal: Joi.number().min(0).required(),
+          note: Joi.string().trim().allow('', null),
         })
       ),
     subtotal: Joi.number().min(0).required(),
@@ -29,12 +32,10 @@ const createOrder = {
     taxName: Joi.string().trim(),
     taxPercentage: Joi.number().min(0).max(100),
     taxAmount: Joi.number().min(0).default(0),
-    deliveryFee: Joi.number().min(0).default(0),
     totalAmount: Joi.number().min(0).required(),
-    orderType: Joi.string()
-      .valid(...Object.values(ORDER_TYPE))
+    paymentMethod: Joi.string()
+      .valid(...Object.values(PAYMENT_METHOD))
       .required(),
-    tableNumber: Joi.string().trim(),
     notes: Joi.string().trim().allow('', null),
   }),
 };
@@ -42,7 +43,7 @@ const createOrder = {
 const getOrders = {
   query: Joi.object().keys({
     status: Joi.string().valid(...Object.values(ORDER_STATUS)),
-    orderType: Joi.string().valid(...Object.values(ORDER_TYPE)),
+    paymentMethod: Joi.string().valid(...Object.values(PAYMENT_METHOD)),
     createdBy: Joi.string().custom(objectId),
     sortBy: Joi.string(),
     limit: Joi.number().integer(),

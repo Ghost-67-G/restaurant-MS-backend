@@ -34,7 +34,7 @@ module.exports = router;
  * /tax:
  *   post:
  *     summary: Create tax configuration
- *     description: Only owner can create tax configuration.
+ *     description: Organization admins can create tax configuration.
  *     tags: [Tax]
  *     security:
  *       - bearerAuth: []

@@ -8,10 +8,10 @@ const logger = require('../config/logger');
 class AppEventEmitter extends EventEmitter {
   constructor() {
     super();
-    
+
     // Set higher max listeners to avoid warnings (default is 10)
     this.setMaxListeners(20);
-    
+
     // Log all emitted events in development
     if (process.env.NODE_ENV === 'development') {
       this.onAny((event, ...args) => {
@@ -57,16 +57,15 @@ const EVENTS = {
   // Order events
   ORDER_CREATED: 'order:created',
   ORDER_UPDATED: 'order:updated',
-  ORDER_READY: 'order:ready',
   ORDER_COMPLETED: 'order:completed',
   ORDER_CANCELLED: 'order:cancelled',
   ORDER_VOIDED: 'order:voided',
   ORDER_REFUNDED: 'order:refunded',
-  
+
   // Inventory events
   INVENTORY_LOW: 'inventory:low',
   INVENTORY_OUT: 'inventory:out',
-  
+
   // User events
   USER_CREATED: 'user:created',
   USER_DELETED: 'user:deleted',

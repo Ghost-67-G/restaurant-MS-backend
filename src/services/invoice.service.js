@@ -2,19 +2,22 @@ const httpStatus = require('http-status');
 const Invoice = require('../models/invoice.model');
 const Order = require('../models/order.model');
 const ApiError = require('../utils/ApiError');
+const { validateOrganizationId, buildOrganizationFilter, safeFindOne } = require('../utils/organizationGuard');
 
 /**
  * Generate next invoice number
  * Format: INV-YYYYMMDD-XXXX (e.g., INV-20260208-0001)
  * @returns {Promise<string>}
  */
-const generateInvoiceNumber = async () => {
+const generateInvoiceNumber = async (organizationId) => {
+  validateOrganizationId(organizationId);
   const today = new Date();
   const dateStr = today.toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
 
   // Find the latest invoice for today
   const prefix = `INV-${dateStr}-`;
   const latestInvoice = await Invoice.findOne({
+    organizationId,
     invoiceNumber: { $regex: `^${prefix}` },
   }).sort({ invoiceNumber: -1 });
 
@@ -32,28 +35,24 @@ const generateInvoiceNumber = async () => {
 /**
  * Create invoice for an order
  * @param {ObjectId} orderId
- * @param {ObjectId} userId - User creating the invoice
+ * @param {Object} user - User creating the invoice
  * @returns {Promise<Invoice>}
  */
-const createInvoice = async (orderId, userId) => {
-  // Get the order with populated data
-  const order = await Order.findById(orderId).populate('createdBy', 'name email');
+const createInvoice = async (organizationId, orderId, user) => {
+  const normalizedOrganizationId = validateOrganizationId(organizationId);
+  const order = await safeFindOne(Order, normalizedOrganizationId, { _id: orderId }).populate('createdBy', 'name email');
 
   if (!order) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Order not found');
   }
 
-  // Check if invoice already exists for this order
-  const existingInvoice = await Invoice.findOne({ orderId });
+  const existingInvoice = await safeFindOne(Invoice, normalizedOrganizationId, { orderId });
   if (existingInvoice) {
-    // Return existing invoice instead of creating duplicate
     return existingInvoice;
   }
 
-  // Generate invoice number
-  const invoiceNumber = await generateInvoiceNumber();
+  const invoiceNumber = await generateInvoiceNumber(normalizedOrganizationId);
 
-  // Create complete snapshot of order
   const snapshot = {
     orderId: order._id.toString(),
     orderNumber: order._id.toString().slice(-8).toUpperCase(),
@@ -65,13 +64,12 @@ const createInvoice = async (orderId, userId) => {
     taxName: order.taxName,
     taxPercentage: order.taxPercentage,
     taxAmount: order.taxAmount || 0,
-    deliveryFee: order.deliveryFee || 0,
     totalAmount: order.totalAmount,
-    orderType: order.orderType,
-    tableNumber: order.tableNumber,
+    paymentMethod: order.paymentMethod,
     notes: order.notes,
     status: order.status,
     createdAt: order.createdAt,
+    organizationId: order.organizationId,
     createdBy: order.createdBy
       ? {
           name: order.createdBy.name,
@@ -84,12 +82,12 @@ const createInvoice = async (orderId, userId) => {
     refundedAmount: order.refundedAmount || 0,
   };
 
-  // Create invoice
   const invoice = await Invoice.create({
+    organizationId: normalizedOrganizationId,
     orderId,
     invoiceNumber,
     snapshot,
-    printedBy: userId,
+    printedBy: user.id,
   });
 
   return invoice;
@@ -100,8 +98,9 @@ const createInvoice = async (orderId, userId) => {
  * @param {ObjectId} invoiceId
  * @returns {Promise<Invoice>}
  */
-const getInvoiceById = async (invoiceId) => {
-  return Invoice.findById(invoiceId);
+const getInvoiceById = async (organizationId, invoiceId) => {
+  validateOrganizationId(organizationId);
+  return safeFindOne(Invoice, organizationId, { _id: invoiceId });
 };
 
 /**
@@ -109,8 +108,9 @@ const getInvoiceById = async (invoiceId) => {
  * @param {string} invoiceNumber
  * @returns {Promise<Invoice>}
  */
-const getInvoiceByNumber = async (invoiceNumber) => {
-  return Invoice.findOne({ invoiceNumber });
+const getInvoiceByNumber = async (organizationId, invoiceNumber) => {
+  validateOrganizationId(organizationId);
+  return safeFindOne(Invoice, organizationId, { invoiceNumber });
 };
 
 /**
@@ -118,8 +118,9 @@ const getInvoiceByNumber = async (invoiceNumber) => {
  * @param {ObjectId} orderId
  * @returns {Promise<Invoice>}
  */
-const getInvoiceByOrderId = async (orderId) => {
-  return Invoice.findOne({ orderId });
+const getInvoiceByOrderId = async (organizationId, orderId) => {
+  validateOrganizationId(organizationId);
+  return safeFindOne(Invoice, organizationId, { orderId });
 };
 
 /**
@@ -128,8 +129,9 @@ const getInvoiceByOrderId = async (orderId) => {
  * @param {Object} options - Query options
  * @returns {Promise<QueryResult>}
  */
-const queryInvoices = async (filter, options) => {
-  const invoices = await Invoice.paginate(filter, options);
+const queryInvoices = async (organizationId, filter, options) => {
+  validateOrganizationId(organizationId);
+  const invoices = await Invoice.paginate(buildOrganizationFilter(organizationId, filter), options);
   return invoices;
 };
 

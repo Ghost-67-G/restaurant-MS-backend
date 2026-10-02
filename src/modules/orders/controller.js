@@ -5,25 +5,24 @@ const catchAsync = require('../../utils/catchAsync');
 const orderService = require('../../services/order.service');
 
 const createOrder = catchAsync(async (req, res) => {
-  const order = await orderService.createOrder(req.body, req.user.id);
+  const order = await orderService.createOrder(req.organizationId, req.body, req.user);
   res.status(httpStatus.CREATED).send(order);
 });
 
 const getOrders = catchAsync(async (req, res) => {
-  const filter = pick(req.query, ['status', 'orderType', 'createdBy']);
+  const filter = pick(req.query, ['status', 'paymentMethod', 'createdBy']);
   const options = pick(req.query, ['sortBy', 'limit', 'page']);
 
-  // Cashiers can only see their own orders unless explicitly querying all
-  if (req.user.role === 'cashier' && !req.query.createdBy) {
+  if (req.user.role === 'staff' && !req.query.createdBy) {
     filter.createdBy = req.user.id;
   }
 
-  const result = await orderService.queryOrders(filter, options);
+  const result = await orderService.queryOrders(req.organizationId, filter, options);
   res.send(result);
 });
 
 const getOrder = catchAsync(async (req, res) => {
-  const order = await orderService.getOrderById(req.params.orderId);
+  const order = await orderService.getOrderById(req.organizationId, req.params.orderId);
   if (!order) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Order not found');
   }
@@ -31,26 +30,21 @@ const getOrder = catchAsync(async (req, res) => {
 });
 
 const updateOrder = catchAsync(async (req, res) => {
-  // Role-based restrictions on status updates
-  if (req.user.role === 'cashier' && ['preparing', 'ready'].includes(req.body.status)) {
-    throw new ApiError(httpStatus.FORBIDDEN, 'Cashiers cannot set order status to preparing or ready');
+  if (req.user.role === 'staff' && !['completed', 'cancelled'].includes(req.body.status)) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Staff can only complete or cancel orders');
   }
 
-  if (req.user.role === 'kitchen' && ['completed', 'cancelled'].includes(req.body.status)) {
-    throw new ApiError(httpStatus.FORBIDDEN, 'Kitchen staff cannot complete or cancel orders');
-  }
-
-  const order = await orderService.updateOrderById(req.params.orderId, req.body, req.user.id);
+  const order = await orderService.updateOrderById(req.organizationId, req.params.orderId, req.body, req.user);
   res.send(order);
 });
 
 const deleteOrder = catchAsync(async (req, res) => {
-  await orderService.deleteOrderById(req.params.orderId);
+  await orderService.deleteOrderById(req.params.orderId, req.organizationId);
   res.status(httpStatus.NO_CONTENT).send();
 });
 
 const cancelOrder = catchAsync(async (req, res) => {
-  const order = await orderService.cancelOrderById(req.params.orderId);
+  const order = await orderService.cancelOrderById(req.organizationId, req.params.orderId, req.user);
   res.send(order);
 });
 

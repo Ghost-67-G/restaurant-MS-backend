@@ -1,8 +1,14 @@
 const mongoose = require('mongoose');
-const { toJSON, paginate } = require('./plugins');
+const { toJSON, paginate, organizationGuard } = require('./plugins');
 
 const taxSchema = mongoose.Schema(
   {
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Organization',
+      required: true,
+      index: true,
+    },
     name: {
       type: String,
       required: true,
@@ -27,6 +33,9 @@ const taxSchema = mongoose.Schema(
 // add plugin that converts mongoose to json
 taxSchema.plugin(toJSON);
 taxSchema.plugin(paginate);
+taxSchema.plugin(organizationGuard);
+
+taxSchema.index({ organizationId: 1, name: 1 }, { unique: true });
 
 /**
  * @typedef Tax

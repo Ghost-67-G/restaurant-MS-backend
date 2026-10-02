@@ -1,11 +1,13 @@
 const Order = require('../models/order.model');
 const { ORDER_STATUS } = require('../config/constants');
+const { validateOrganizationId } = require('../utils/organizationGuard');
 
 /**
  * Get dashboard statistics for today
  * @returns {Promise<Object>}
  */
-const getTodayStats = async () => {
+const getTodayStats = async (organizationId) => {
+  validateOrganizationId(organizationId);
   // Get start and end of today
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -17,6 +19,7 @@ const getTodayStats = async () => {
   const stats = await Order.aggregate([
     {
       $match: {
+        organizationId,
         createdAt: {
           $gte: startOfDay,
           $lte: endOfDay,

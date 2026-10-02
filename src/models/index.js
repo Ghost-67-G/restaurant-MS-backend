@@ -1,11 +1,10 @@
 module.exports.Token = require('./token.model');
 module.exports.User = require('./user.model');
-module.exports.MenuItem = require('./menuItem.model');
+module.exports.Organization = require('./organization.model');
+module.exports.Item = require('./item.model');
 module.exports.Order = require('./order.model');
 module.exports.Inventory = require('./inventory.model');
 module.exports.Tax = require('./tax.model');
-module.exports.Ingredient = require('./ingredient.model');
-module.exports.Recipe = require('./recipe.model');
 module.exports.InventoryLedger = require('./inventoryLedger.model');
 module.exports.EventLog = require('./eventLog.model');
 module.exports.OrderAdjustment = require('./orderAdjustment.model');

@@ -3,8 +3,10 @@ const { objectId } = require('../../validations/custom.validation');
 
 const createInventory = {
   body: Joi.object().keys({
-    name: Joi.string().required(),
-    quantity: Joi.number().min(0).required(),
+    itemId: Joi.string().custom(objectId).required(),
+    quantity: Joi.number().min(0).default(0),
+    lowStockThreshold: Joi.number().min(0).default(10),
+    allowNegativeStock: Joi.boolean().default(false),
   }),
 };
 
@@ -29,8 +31,10 @@ const updateInventory = {
   }),
   body: Joi.object()
     .keys({
-      name: Joi.string(),
       quantity: Joi.number().min(0),
+      lowStockThreshold: Joi.number().min(0),
+      allowNegativeStock: Joi.boolean(),
+      reason: Joi.string().trim(),
     })
     .min(1),
 };

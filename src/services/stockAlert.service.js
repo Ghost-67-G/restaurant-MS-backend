@@ -1,26 +1,30 @@
 const { StockAlert, Inventory } = require('../models');
+const { validateOrganizationId, buildOrganizationFilter, safeFindOne } = require('../utils/organizationGuard');
 
 /**
- * Check all ingredients and create alerts for low stock
+ * Check all inventory records and create alerts for low stock
  * @returns {Promise<Array>}
  */
-const checkAndCreateAlerts = async () => {
-  const ingredients = await Inventory.find({});
+const checkAndCreateAlerts = async (organizationId) => {
+  validateOrganizationId(organizationId);
+  const inventoryRecords = await Inventory.find(buildOrganizationFilter(organizationId)).populate('itemId');
 
-  const alertPromises = ingredients
-    .filter((ingredient) => ingredient.quantity <= ingredient.lowStockThreshold)
-    .map(async (ingredient) => {
-      // Check if there's already a pending alert for this ingredient
+  const alertPromises = inventoryRecords
+    .filter((inventory) => inventory.quantity <= inventory.lowStockThreshold)
+    .map(async (inventory) => {
       const existingAlert = await StockAlert.findOne({
-        ingredientId: ingredient.id,
+        organizationId,
+        inventoryId: inventory.id,
         status: 'PENDING',
       });
 
       if (!existingAlert) {
         const alert = await StockAlert.create({
-          ingredientId: ingredient.id,
-          currentStock: ingredient.quantity,
-          threshold: ingredient.lowStockThreshold,
+          organizationId,
+          inventoryId: inventory.id,
+          itemId: inventory.itemId.id,
+          currentStock: inventory.quantity,
+          threshold: inventory.lowStockThreshold,
         });
         return alert;
       }
@@ -32,29 +36,32 @@ const checkAndCreateAlerts = async () => {
 };
 
 /**
- * Check single ingredient and create alert if needed
- * @param {ObjectId} ingredientId
+ * Check single inventory record and create alert if needed
+ * @param {ObjectId} inventoryId
  * @returns {Promise<StockAlert|null>}
  */
-const checkIngredientStock = async (ingredientId) => {
-  const ingredient = await Inventory.findById(ingredientId);
-  
-  if (!ingredient) {
+const checkInventoryStock = async (organizationId, inventoryId) => {
+  validateOrganizationId(organizationId);
+  const inventory = await safeFindOne(Inventory, organizationId, { _id: inventoryId }).populate('itemId');
+
+  if (!inventory) {
     return null;
   }
 
-  if (ingredient.quantity <= ingredient.lowStockThreshold) {
-    // Check if there's already a pending alert
+  if (inventory.quantity <= inventory.lowStockThreshold) {
     const existingAlert = await StockAlert.findOne({
-      ingredientId: ingredient.id,
+      organizationId,
+      inventoryId: inventory.id,
       status: 'PENDING',
     });
 
     if (!existingAlert) {
       const alert = await StockAlert.create({
-        ingredientId: ingredient.id,
-        currentStock: ingredient.quantity,
-        threshold: ingredient.lowStockThreshold,
+        organizationId,
+        inventoryId: inventory.id,
+        itemId: inventory.itemId.id,
+        currentStock: inventory.quantity,
+        threshold: inventory.lowStockThreshold,
       });
       return alert;
     }
@@ -69,11 +76,13 @@ const checkIngredientStock = async (ingredientId) => {
  * @param {Object} options - Query options
  * @returns {Promise<QueryResult>}
  */
-const getActiveAlerts = async (filter, options) => {
-  const alerts = await StockAlert.paginate(
-    { ...filter, status: 'PENDING' },
-    { ...options, populate: 'ingredientId acknowledgedBy', sortBy: 'triggeredAt:desc' }
-  );
+const getActiveAlerts = async (organizationId, filter, options) => {
+  validateOrganizationId(organizationId);
+  const alerts = await StockAlert.paginate(buildOrganizationFilter(organizationId, { ...filter, status: 'PENDING' }), {
+    ...options,
+    populate: 'inventoryId itemId acknowledgedBy',
+    sortBy: 'triggeredAt:desc',
+  });
   return alerts;
 };
 
@@ -83,10 +92,11 @@ const getActiveAlerts = async (filter, options) => {
  * @param {Object} options - Query options
  * @returns {Promise<QueryResult>}
  */
-const getAlerts = async (filter, options) => {
-  const alerts = await StockAlert.paginate(filter, {
+const getAlerts = async (organizationId, filter, options) => {
+  validateOrganizationId(organizationId);
+  const alerts = await StockAlert.paginate(buildOrganizationFilter(organizationId, filter), {
     ...options,
-    populate: 'ingredientId acknowledgedBy',
+    populate: 'inventoryId itemId acknowledgedBy',
     sortBy: 'triggeredAt:desc',
   });
   return alerts;
@@ -97,8 +107,9 @@ const getAlerts = async (filter, options) => {
  * @param {ObjectId} id
  * @returns {Promise<StockAlert>}
  */
-const getAlertById = async (id) => {
-  return StockAlert.findById(id).populate('ingredientId acknowledgedBy');
+const getAlertById = async (organizationId, id) => {
+  validateOrganizationId(organizationId);
+  return safeFindOne(StockAlert, organizationId, { _id: id }).populate('inventoryId itemId acknowledgedBy');
 };
 
 /**
@@ -107,9 +118,10 @@ const getAlertById = async (id) => {
  * @param {ObjectId} userId
  * @returns {Promise<StockAlert>}
  */
-const acknowledgeAlert = async (alertId, userId) => {
-  const alert = await StockAlert.findById(alertId);
-  
+const acknowledgeAlert = async (organizationId, alertId, userId) => {
+  validateOrganizationId(organizationId);
+  const alert = await safeFindOne(StockAlert, organizationId, { _id: alertId });
+
   if (!alert) {
     throw new Error('Alert not found');
   }
@@ -132,9 +144,10 @@ const acknowledgeAlert = async (alertId, userId) => {
  * @param {ObjectId} userId
  * @returns {Promise<Number>}
  */
-const acknowledgeMultipleAlerts = async (alertIds, userId) => {
+const acknowledgeMultipleAlerts = async (organizationId, alertIds, userId) => {
+  validateOrganizationId(organizationId);
   const result = await StockAlert.updateMany(
-    { _id: { $in: alertIds }, status: 'PENDING' },
+    buildOrganizationFilter(organizationId, { _id: { $in: alertIds }, status: 'PENDING' }),
     {
       $set: {
         status: 'ACKNOWLEDGED',
@@ -144,20 +157,21 @@ const acknowledgeMultipleAlerts = async (alertIds, userId) => {
     }
   );
 
-  return result.modifiedCount;
+  return result.modifiedCount || result.nModified || 0;
 };
 
 /**
  * Get count of pending alerts
  * @returns {Promise<Number>}
  */
-const getPendingAlertsCount = async () => {
-  return StockAlert.countDocuments({ status: 'PENDING' });
+const getPendingAlertsCount = async (organizationId) => {
+  validateOrganizationId(organizationId);
+  return StockAlert.countDocuments(buildOrganizationFilter(organizationId, { status: 'PENDING' }));
 };
 
 module.exports = {
   checkAndCreateAlerts,
-  checkIngredientStock,
+  checkInventoryStock,
   getActiveAlerts,
   getAlerts,
   getAlertById,

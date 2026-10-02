@@ -1,8 +1,14 @@
 const mongoose = require('mongoose');
-const { toJSON, paginate } = require('./plugins');
+const { toJSON, paginate, organizationGuard } = require('./plugins');
 
 const orderAdjustmentSchema = mongoose.Schema(
   {
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Organization',
+      required: true,
+      index: true,
+    },
     orderId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Order',
@@ -38,9 +44,11 @@ const orderAdjustmentSchema = mongoose.Schema(
 // Add plugins
 orderAdjustmentSchema.plugin(toJSON);
 orderAdjustmentSchema.plugin(paginate);
+orderAdjustmentSchema.plugin(organizationGuard);
 
 // Indexes for common queries
 orderAdjustmentSchema.index({ orderId: 1, createdAt: -1 });
+orderAdjustmentSchema.index({ organizationId: 1, createdAt: -1 });
 orderAdjustmentSchema.index({ type: 1 });
 orderAdjustmentSchema.index({ createdBy: 1 });
 

@@ -17,6 +17,11 @@
  */
 
 const PERMISSIONS = {
+  ORGANIZATION: {
+    VIEW: 'organization.view',
+    MANAGE: 'organization.manage',
+  },
+
   // Order Management
   ORDER: {
     CREATE: 'order.create',
@@ -27,10 +32,10 @@ const PERMISSIONS = {
     MANAGE: 'order.manage', // create, update status, cancel, delete
   },
 
-  // Menu Management
-  MENU: {
-    VIEW: 'menu.view',
-    MANAGE: 'menu.manage', // create, update, delete
+  // Item Management
+  ITEM: {
+    VIEW: 'item.view',
+    MANAGE: 'item.manage',
   },
 
   // Inventory Management
@@ -72,11 +77,12 @@ const PERMISSIONS = {
  */
 const ROLE_PERMISSIONS = {
   owner: [
-    // Full access to everything
+    PERMISSIONS.ORGANIZATION.VIEW,
+    PERMISSIONS.ORGANIZATION.MANAGE,
     PERMISSIONS.USER.VIEW,
     PERMISSIONS.USER.MANAGE,
-    PERMISSIONS.MENU.VIEW,
-    PERMISSIONS.MENU.MANAGE,
+    PERMISSIONS.ITEM.VIEW,
+    PERMISSIONS.ITEM.MANAGE,
     PERMISSIONS.ORDER.CREATE,
     PERMISSIONS.ORDER.VIEW,
     PERMISSIONS.ORDER.UPDATE_STATUS,
@@ -93,23 +99,31 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.POS.ACCESS,
   ],
 
-  cashier: [
-    // POS and order operations
-    PERMISSIONS.POS.ACCESS,
+  manager: [
+    PERMISSIONS.USER.VIEW,
+    PERMISSIONS.ITEM.VIEW,
+    PERMISSIONS.ITEM.MANAGE,
     PERMISSIONS.ORDER.CREATE,
     PERMISSIONS.ORDER.VIEW,
     PERMISSIONS.ORDER.UPDATE_STATUS,
     PERMISSIONS.ORDER.CANCEL,
-    PERMISSIONS.MENU.VIEW,
+    PERMISSIONS.INVENTORY.VIEW,
+    PERMISSIONS.INVENTORY.ADJUST,
     PERMISSIONS.TAX.VIEW,
     PERMISSIONS.DASHBOARD.VIEW,
+    PERMISSIONS.REPORTS.VIEW,
+    PERMISSIONS.POS.ACCESS,
   ],
 
-  kitchen: [
-    // Order processing only
+  staff: [
+    PERMISSIONS.POS.ACCESS,
+    PERMISSIONS.ITEM.VIEW,
+    PERMISSIONS.ORDER.CREATE,
     PERMISSIONS.ORDER.VIEW,
     PERMISSIONS.ORDER.UPDATE_STATUS,
-    PERMISSIONS.MENU.VIEW,
+    PERMISSIONS.ORDER.CANCEL,
+    PERMISSIONS.TAX.VIEW,
+    PERMISSIONS.DASHBOARD.VIEW,
   ],
 };
 

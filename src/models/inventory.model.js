@@ -1,12 +1,23 @@
 const mongoose = require('mongoose');
-const { toJSON, paginate } = require('./plugins');
+const { toJSON, paginate, organizationGuard } = require('./plugins');
 
 const inventorySchema = mongoose.Schema(
   {
-    name: {
-      type: String,
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Organization',
       required: true,
-      trim: true,
+      index: true,
+    },
+    itemId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Item',
+      required: true,
+      index: true,
+    },
+    warehouseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      index: true,
     },
     quantity: {
       type: Number,
@@ -19,6 +30,10 @@ const inventorySchema = mongoose.Schema(
       default: 10,
       min: 0,
     },
+    allowNegativeStock: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
@@ -28,6 +43,12 @@ const inventorySchema = mongoose.Schema(
 // add plugin that converts mongoose to json
 inventorySchema.plugin(toJSON);
 inventorySchema.plugin(paginate);
+inventorySchema.plugin(organizationGuard);
+
+inventorySchema.index({ organizationId: 1, itemId: 1 }, { unique: true });
+inventorySchema.index({ organizationId: 1, createdAt: -1 });
+inventorySchema.index({ organizationId: 1, warehouseId: 1 });
+inventorySchema.index({ organizationId: 1, warehouseId: 1, itemId: 1 });
 
 /**
  * @typedef Inventory

@@ -32,7 +32,7 @@ module.exports = router;
  * /users:
  *   post:
  *     summary: Create a user
- *     description: Only owners can create users.
+ *     description: Organization admins can create users within their organization.
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []
@@ -47,7 +47,6 @@ module.exports = router;
  *               - email
  *               - password
  *               - role
- *               - restaurantName
  *             properties:
  *               name:
  *                 type: string
@@ -62,15 +61,12 @@ module.exports = router;
  *                 description: At least one number and one letter
  *               role:
  *                 type: string
- *                 enum: [cashier, kitchen]
- *               restaurantName:
- *                 type: string
+ *                 enum: [owner, manager, staff]
  *             example:
  *               name: John Doe
  *               email: johndoe@example.com
  *               password: password123
- *               role: cashier
- *               restaurantName: The Great Restaurant
+ *               role: staff
  *     responses:
  *       "201":
  *         description: Created
@@ -87,7 +83,7 @@ module.exports = router;
  *
  *   get:
  *     summary: Get all users
- *     description: Only owners can retrieve all users.
+ *     description: Organization admins can retrieve users in their organization.
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []
@@ -106,7 +102,7 @@ module.exports = router;
  *         name: role
  *         schema:
  *           type: string
- *           enum: [waiter, kitchen_manager]
+ *           enum: [owner, manager, staff]
  *         description: User role
  *       - in: query
  *         name: sortBy
@@ -162,7 +158,7 @@ module.exports = router;
  * /users/{id}:
  *   get:
  *     summary: Get a user
- *     description: Only owners can fetch user information.
+ *     description: Authorized users can fetch user information inside their organization.
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []
@@ -189,7 +185,7 @@ module.exports = router;
  *
  *   patch:
  *     summary: Update a user
- *     description: Only owners can update users.
+ *     description: Organization admins can update users.
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []
@@ -220,13 +216,11 @@ module.exports = router;
  *                 description: At least one number and one letter
  *               role:
  *                 type: string
- *                 enum: [waiter, kitchen_manager]
- *               restaurantName:
- *                 type: string
+ *                 enum: [owner, manager, staff]
  *             example:
  *               name: John Doe Updated
  *               email: johnupdated@example.com
- *               role: kitchen_manager
+ *               role: manager
  *     responses:
  *       "200":
  *         description: OK

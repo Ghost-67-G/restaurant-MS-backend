@@ -7,11 +7,20 @@
   "parserOptions": {
     "ecmaVersion": 2018
   },
+  "overrides": [
+    {
+      "files": ["tests/**/*.js"],
+      "env": {
+        "jest": true
+      }
+    }
+  ],
   "rules": {
     "no-console": "error",
     "func-names": "off",
     "no-underscore-dangle": "off",
     "consistent-return": "off",
-    "security/detect-object-injection": "off"
+    "security/detect-object-injection": "off",
+    "tenant-service-organization-id": "error"
   }
 }

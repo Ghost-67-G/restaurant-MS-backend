@@ -6,8 +6,7 @@ const createUser = {
     name: Joi.string().required(),
     email: Joi.string().required().email(),
     password: Joi.string().required().custom(password),
-    role: Joi.string().required().valid('cashier', 'kitchen'),
-    restaurantName: Joi.string(),
+    role: Joi.string().required().valid('owner', 'manager', 'staff'),
   }),
 };
 
@@ -15,7 +14,7 @@ const getUsers = {
   query: Joi.object().keys({
     name: Joi.string(),
     email: Joi.string(),
-    role: Joi.string().valid('cashier', 'kitchen'),
+    role: Joi.string().valid('owner', 'manager', 'staff'),
     sortBy: Joi.string(),
     limit: Joi.number().integer(),
     page: Joi.number().integer(),
@@ -37,8 +36,7 @@ const updateUser = {
       name: Joi.string(),
       email: Joi.string().email(),
       password: Joi.string().custom(password),
-      role: Joi.string().valid('cashier', 'kitchen'),
-      restaurantName: Joi.string(),
+      role: Joi.string().valid('owner', 'manager', 'staff'),
     })
     .min(1),
 };

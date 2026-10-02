@@ -12,6 +12,7 @@ const EventLog = require('../models/eventLog.model');
 const createEventLog = async (eventName, eventData) => {
   try {
     return await EventLog.create({
+      organizationId: eventData.organizationId,
       eventName,
       eventData,
       status: 'pending',
@@ -31,16 +32,16 @@ const createEventLog = async (eventName, eventData) => {
 const updateEventLog = async (logId, status, error = null) => {
   try {
     if (!logId) return;
-    
+
     const update = {
       status,
       processingCompletedAt: new Date(),
     };
-    
+
     if (error) {
       update.error = error;
     }
-    
+
     await EventLog.findByIdAndUpdate(logId, update);
   } catch (err) {
     logger.error('Failed to update event log:', err);
@@ -68,23 +69,6 @@ const registerEventHandlers = () => {
       await orderEvents.handleOrderUpdated(data);
     } catch (error) {
       logger.error('Error in ORDER_UPDATED handler:', error);
-    }
-  });
-
-  eventEmitter.on(EVENTS.ORDER_READY, async (data) => {
-    const logId = await createEventLog(EVENTS.ORDER_READY, data);
-    try {
-      if (logId) {
-        await EventLog.findByIdAndUpdate(logId, {
-          status: 'processing',
-          processingStartedAt: new Date(),
-        });
-      }
-      await orderEvents.handleOrderReady(data);
-      await updateEventLog(logId, 'completed');
-    } catch (error) {
-      logger.error('Error in ORDER_READY handler:', error);
-      await updateEventLog(logId, 'failed', error.message);
     }
   });
 

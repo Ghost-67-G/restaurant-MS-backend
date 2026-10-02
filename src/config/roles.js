@@ -1,82 +1,52 @@
 const { PERMISSIONS } = require('./permissions');
 
-/**
- * Role-based access control configuration
- *
- * ORDER LIFECYCLE:
- * - pending → default status when order created
- * - preparing → kitchen marks when they start
- * - completed → kitchen or cashier marks when done (inventory reduced)
- * - cancelled → owner or cashier can cancel
- *
- * CASHIER:
- * - POS screen access
- * - Create orders
- * - View own orders by default
- * - Update order status: pending → completed
- * - Cancel orders
- * - View menu and dashboard
- *
- * KITCHEN:
- * - View all orders
- * - Update order status: pending → preparing → completed
- * - View menu items
- * - No dashboard, inventory, or cancel access
- *
- * OWNER:
- * - Full access to everything
- * - All CRUD operations on all modules
- */
-
 const allRoles = {
   owner: [
-    // User management
+    PERMISSIONS.ORGANIZATION.VIEW,
+    PERMISSIONS.ORGANIZATION.MANAGE,
     PERMISSIONS.USER.VIEW,
     PERMISSIONS.USER.MANAGE,
-    // Menu management
-    PERMISSIONS.MENU.VIEW,
-    PERMISSIONS.MENU.MANAGE,
-    // Order management
+    PERMISSIONS.ITEM.VIEW,
+    PERMISSIONS.ITEM.MANAGE,
     PERMISSIONS.ORDER.CREATE,
     PERMISSIONS.ORDER.VIEW,
     PERMISSIONS.ORDER.UPDATE_STATUS,
     PERMISSIONS.ORDER.CANCEL,
     PERMISSIONS.ORDER.DELETE,
     PERMISSIONS.ORDER.MANAGE,
-    // Inventory management
     PERMISSIONS.INVENTORY.VIEW,
     PERMISSIONS.INVENTORY.MANAGE,
     PERMISSIONS.INVENTORY.ADJUST,
-    // Tax configuration
     PERMISSIONS.TAX.VIEW,
     PERMISSIONS.TAX.MANAGE,
-    // Dashboard & Reports
     PERMISSIONS.DASHBOARD.VIEW,
     PERMISSIONS.REPORTS.VIEW,
-    // POS access
     PERMISSIONS.POS.ACCESS,
   ],
-  cashier: [
-    // POS operations
+  manager: [
+    PERMISSIONS.USER.VIEW,
+    PERMISSIONS.ITEM.VIEW,
+    PERMISSIONS.ITEM.MANAGE,
     PERMISSIONS.POS.ACCESS,
-    // Order operations
     PERMISSIONS.ORDER.CREATE,
     PERMISSIONS.ORDER.VIEW,
     PERMISSIONS.ORDER.UPDATE_STATUS,
     PERMISSIONS.ORDER.CANCEL,
-    // View menu
-    PERMISSIONS.MENU.VIEW,
-    // View tax
+    PERMISSIONS.INVENTORY.VIEW,
+    PERMISSIONS.INVENTORY.ADJUST,
     PERMISSIONS.TAX.VIEW,
-    // Dashboard access
     PERMISSIONS.DASHBOARD.VIEW,
+    PERMISSIONS.REPORTS.VIEW,
   ],
-  kitchen: [
-    // Order operations only
+  staff: [
+    PERMISSIONS.POS.ACCESS,
+    PERMISSIONS.ITEM.VIEW,
+    PERMISSIONS.ORDER.CREATE,
     PERMISSIONS.ORDER.VIEW,
     PERMISSIONS.ORDER.UPDATE_STATUS,
-    // View menu
-    PERMISSIONS.MENU.VIEW,
+    PERMISSIONS.ORDER.CANCEL,
+    PERMISSIONS.TAX.VIEW,
+    PERMISSIONS.DASHBOARD.VIEW,
   ],
 };
 

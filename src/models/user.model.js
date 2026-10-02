@@ -11,10 +11,11 @@ const userSchema = mongoose.Schema(
       required: true,
       trim: true,
     },
-    restaurantName: {
-      type: String,
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Organization',
       required: true,
-      trim: true,
+      index: true,
     },
     email: {
       type: String,
@@ -43,7 +44,7 @@ const userSchema = mongoose.Schema(
     role: {
       type: String,
       enum: roles,
-      default: 'cashier',
+      default: 'staff',
     },
     isEmailVerified: {
       type: Boolean,
@@ -58,6 +59,8 @@ const userSchema = mongoose.Schema(
 // add plugin that converts mongoose to json
 userSchema.plugin(toJSON);
 userSchema.plugin(paginate);
+
+userSchema.index({ organizationId: 1, role: 1 });
 
 /**
  * Check if email is taken

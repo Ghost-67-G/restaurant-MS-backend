@@ -1,34 +1,37 @@
 const httpStatus = require('http-status');
 const Tax = require('../models/tax.model');
 const ApiError = require('../utils/ApiError');
+const { validateOrganizationId, buildOrganizationFilter, safeFindOne } = require('../utils/organizationGuard');
 
 /**
  * Create tax configuration
  * @param {Object} taxBody
  * @returns {Promise<Tax>}
  */
-const createTax = async (taxBody) => {
-  // Deactivate any existing active tax
+const createTax = async (organizationId, taxBody) => {
+  validateOrganizationId(organizationId);
   if (taxBody.isActive) {
-    await Tax.updateMany({ isActive: true }, { isActive: false });
+    await Tax.updateMany(buildOrganizationFilter(organizationId, { isActive: true }), { isActive: false });
   }
-  return Tax.create(taxBody);
+  return Tax.create({ organizationId, ...taxBody });
 };
 
 /**
  * Get all tax configurations
  * @returns {Promise<Tax[]>}
  */
-const getAllTaxes = async () => {
-  return Tax.paginate({}, { sortBy: 'createdAt:desc' });
+const getAllTaxes = async (organizationId) => {
+  validateOrganizationId(organizationId);
+  return Tax.paginate({ organizationId }, { sortBy: 'createdAt:desc' });
 };
 
 /**
  * Get active tax configuration
  * @returns {Promise<Tax>}
  */
-const getActiveTax = async () => {
-  return Tax.findOne({ isActive: true });
+const getActiveTax = async (organizationId) => {
+  validateOrganizationId(organizationId);
+  return safeFindOne(Tax, organizationId, { isActive: true });
 };
 
 /**
@@ -36,8 +39,9 @@ const getActiveTax = async () => {
  * @param {ObjectId} id
  * @returns {Promise<Tax>}
  */
-const getTaxById = async (id) => {
-  return Tax.findById(id);
+const getTaxById = async (organizationId, id) => {
+  validateOrganizationId(organizationId);
+  return safeFindOne(Tax, organizationId, { _id: id });
 };
 
 /**
@@ -46,17 +50,19 @@ const getTaxById = async (id) => {
  * @param {Object} updateBody
  * @returns {Promise<Tax>}
  */
-const updateTaxById = async (taxId, updateBody) => {
-  const tax = await getTaxById(taxId);
+const updateTaxById = async (organizationId, taxId, updateBody) => {
+  validateOrganizationId(organizationId);
+  const tax = await getTaxById(organizationId, taxId);
   if (!tax) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Tax configuration not found');
   }
-  
-  // If setting this as active, deactivate others
+
   if (updateBody.isActive) {
-    await Tax.updateMany({ _id: { $ne: taxId }, isActive: true }, { isActive: false });
+    await Tax.updateMany(buildOrganizationFilter(organizationId, { _id: { $ne: taxId }, isActive: true }), {
+      isActive: false,
+    });
   }
-  
+
   Object.assign(tax, updateBody);
   await tax.save();
   return tax;
@@ -67,8 +73,9 @@ const updateTaxById = async (taxId, updateBody) => {
  * @param {ObjectId} taxId
  * @returns {Promise<Tax>}
  */
-const deleteTaxById = async (taxId) => {
-  const tax = await getTaxById(taxId);
+const deleteTaxById = async (organizationId, taxId) => {
+  validateOrganizationId(organizationId);
+  const tax = await getTaxById(organizationId, taxId);
   if (!tax) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Tax configuration not found');
   }

@@ -12,19 +12,22 @@ const mongooseOptions = {
 
 logger.info(`Connecting to MongoDB at ${config.mongoose.url}`);
 
-mongoose.connect(config.mongoose.url, mongooseOptions).then(() => {
-  logger.info('Connected to MongoDB');
-  
-  // Register event handlers
-  registerEventHandlers();
-  
-  server = app.listen(config.port, () => {
-    logger.info(`Listening to port ${config.port}`);
+mongoose
+  .connect(config.mongoose.url, mongooseOptions)
+  .then(() => {
+    logger.info('Connected to MongoDB');
+
+    // Register event handlers
+    registerEventHandlers();
+
+    server = app.listen(config.port, () => {
+      logger.info(`Listening to port ${config.port}`);
+    });
+  })
+  .catch((error) => {
+    logger.error(`MongoDB connection failed: ${error.message}`);
+    process.exit(1);
   });
-}).catch((error) => {
-  logger.error(`MongoDB connection failed: ${error.message}`);
-  process.exit(1);
-});
 
 const exitHandler = () => {
   if (server) {

@@ -38,10 +38,16 @@ module.exports = router;
  *           schema:
  *             type: object
  *             required:
+ *               - organizationName
  *               - name
  *               - email
  *               - password
  *             properties:
+ *               organizationName:
+ *                 type: string
+ *               plan:
+ *                 type: string
+ *                 enum: [free, starter, pro]
  *               name:
  *                 type: string
  *               email:
@@ -54,6 +60,8 @@ module.exports = router;
  *                 minLength: 8
  *                 description: At least one number and one letter
  *             example:
+ *               organizationName: Acme Retail
+ *               plan: starter
  *               name: fake name
  *               email: fake@example.com
  *               password: password1

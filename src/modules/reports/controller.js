@@ -3,7 +3,7 @@ const catchAsync = require('../../utils/catchAsync');
 const reportsService = require('../../services/reports.service');
 
 const getSummary = catchAsync(async (req, res) => {
-  const summary = await reportsService.getSummary(req.query);
+  const summary = await reportsService.getSummary(req.organizationId, req.query);
   res.status(httpStatus.OK).send(summary);
 });
 

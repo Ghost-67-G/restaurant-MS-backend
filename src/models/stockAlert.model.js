@@ -1,11 +1,22 @@
 const mongoose = require('mongoose');
-const { toJSON, paginate } = require('./plugins');
+const { toJSON, paginate, organizationGuard } = require('./plugins');
 
 const stockAlertSchema = mongoose.Schema(
   {
-    ingredientId: {
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Organization',
+      required: true,
+      index: true,
+    },
+    inventoryId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Inventory',
+      required: true,
+    },
+    itemId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Item',
       required: true,
     },
     currentStock: {
@@ -39,12 +50,13 @@ const stockAlertSchema = mongoose.Schema(
 );
 
 // Index for faster queries
-stockAlertSchema.index({ ingredientId: 1, status: 1 });
+stockAlertSchema.index({ organizationId: 1, inventoryId: 1, status: 1 });
 stockAlertSchema.index({ status: 1, triggeredAt: -1 });
 
 // add plugin that converts mongoose to json
 stockAlertSchema.plugin(toJSON);
 stockAlertSchema.plugin(paginate);
+stockAlertSchema.plugin(organizationGuard);
 
 /**
  * @typedef StockAlert

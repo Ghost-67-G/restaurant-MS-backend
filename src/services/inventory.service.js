@@ -1,14 +1,28 @@
 const httpStatus = require('http-status');
-const Inventory = require('../models/inventory.model');
+const { Inventory, Item } = require('../models');
 const ApiError = require('../utils/ApiError');
+const inventoryLedgerService = require('./inventoryLedger.service');
+const { validateOrganizationId, buildOrganizationFilter, safeFindOne, safeQuery } = require('../utils/organizationGuard');
 
 /**
  * Create an inventory item
  * @param {Object} inventoryBody
  * @returns {Promise<Inventory>}
  */
-const createInventory = async (inventoryBody) => {
-  return Inventory.create(inventoryBody);
+const createInventory = async (organizationId, inventoryBody) => {
+  validateOrganizationId(organizationId);
+  const item = await safeFindOne(Item, organizationId, { _id: inventoryBody.itemId });
+  if (!item) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Item not found');
+  }
+
+  return Inventory.create({
+    organizationId,
+    itemId: item.id,
+    quantity: inventoryBody.quantity || 0,
+    lowStockThreshold: inventoryBody.lowStockThreshold || 10,
+    allowNegativeStock: Boolean(inventoryBody.allowNegativeStock),
+  });
 };
 
 /**
@@ -20,8 +34,20 @@ const createInventory = async (inventoryBody) => {
  * @param {number} [options.page] - Current page (default = 1)
  * @returns {Promise<QueryResult>}
  */
-const queryInventory = async (filter, options) => {
-  const inventory = await Inventory.paginate(filter, options);
+const queryInventory = async (organizationId, filter, options) => {
+  validateOrganizationId(organizationId);
+  const queryFilter = buildOrganizationFilter(organizationId, filter);
+
+  if (filter.name) {
+    const items = await safeQuery(Item, organizationId, { name: filter.name }).select('_id');
+    queryFilter.itemId = { $in: items.map((item) => item._id) };
+    delete queryFilter.name;
+  }
+
+  const inventory = await Inventory.paginate(queryFilter, {
+    ...options,
+    populate: 'itemId',
+  });
   return inventory;
 };
 
@@ -30,8 +56,9 @@ const queryInventory = async (filter, options) => {
  * @param {ObjectId} id
  * @returns {Promise<Inventory>}
  */
-const getInventoryById = async (id) => {
-  return Inventory.findById(id);
+const getInventoryById = async (organizationId, id) => {
+  validateOrganizationId(organizationId);
+  return safeFindOne(Inventory, organizationId, { _id: id }).populate('itemId');
 };
 
 /**
@@ -40,12 +67,34 @@ const getInventoryById = async (id) => {
  * @param {Object} updateBody
  * @returns {Promise<Inventory>}
  */
-const updateInventoryById = async (inventoryId, updateBody) => {
-  const inventory = await getInventoryById(inventoryId);
+const updateInventoryById = async (organizationId, inventoryId, updateBody, userId) => {
+  validateOrganizationId(organizationId);
+  const inventory = await getInventoryById(organizationId, inventoryId);
   if (!inventory) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Inventory item not found');
   }
-  Object.assign(inventory, updateBody);
+
+  if (updateBody.quantity !== undefined && updateBody.quantity !== inventory.quantity) {
+    const quantityDelta = updateBody.quantity - inventory.quantity;
+    await inventoryLedgerService.createLedgerEntry(organizationId, {
+      organizationId,
+      inventoryId: inventory.id,
+      itemId: inventory.itemId.id,
+      type: quantityDelta > 0 ? 'IN' : 'ADJUSTMENT',
+      quantity: quantityDelta,
+      reason: updateBody.reason || 'Manual stock update',
+      referenceType: 'MANUAL',
+      createdBy: userId,
+    });
+  }
+
+  if (updateBody.lowStockThreshold !== undefined) {
+    inventory.lowStockThreshold = updateBody.lowStockThreshold;
+  }
+  if (updateBody.allowNegativeStock !== undefined) {
+    inventory.allowNegativeStock = updateBody.allowNegativeStock;
+  }
+
   await inventory.save();
   return inventory;
 };
@@ -55,8 +104,9 @@ const updateInventoryById = async (inventoryId, updateBody) => {
  * @param {ObjectId} inventoryId
  * @returns {Promise<Inventory>}
  */
-const deleteInventoryById = async (inventoryId) => {
-  const inventory = await getInventoryById(inventoryId);
+const deleteInventoryById = async (organizationId, inventoryId) => {
+  validateOrganizationId(organizationId);
+  const inventory = await getInventoryById(organizationId, inventoryId);
   if (!inventory) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Inventory item not found');
   }
@@ -70,15 +120,33 @@ const deleteInventoryById = async (inventoryId) => {
  * @param {Number} quantity
  * @returns {Promise<Inventory>}
  */
-const reduceInventory = async (inventoryId, quantity) => {
-  const inventory = await getInventoryById(inventoryId);
+const reduceInventory = async (
+  organizationId,
+  inventoryId,
+  quantity,
+  userId,
+  referenceType = 'ORDER',
+  referenceId = null
+) => {
+  validateOrganizationId(organizationId);
+  const inventory = await getInventoryById(organizationId, inventoryId);
   if (!inventory) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Inventory item not found');
   }
 
-  inventory.quantity = Math.max(0, inventory.quantity - quantity);
-  await inventory.save();
-  return inventory;
+  await inventoryLedgerService.createLedgerEntry(organizationId, {
+    organizationId,
+    inventoryId: inventory.id,
+    itemId: inventory.itemId.id,
+    type: 'OUT',
+    quantity: -Math.abs(quantity),
+    reason: 'Order inventory deduction',
+    referenceType,
+    referenceId,
+    createdBy: userId,
+  });
+
+  return getInventoryById(organizationId, inventoryId);
 };
 
 /**
@@ -87,15 +155,33 @@ const reduceInventory = async (inventoryId, quantity) => {
  * @param {Number} quantity
  * @returns {Promise<Inventory>}
  */
-const increaseInventory = async (inventoryId, quantity) => {
-  const inventory = await getInventoryById(inventoryId);
+const increaseInventory = async (
+  organizationId,
+  inventoryId,
+  quantity,
+  userId,
+  referenceType = 'REFUND',
+  referenceId = null
+) => {
+  validateOrganizationId(organizationId);
+  const inventory = await getInventoryById(organizationId, inventoryId);
   if (!inventory) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Inventory item not found');
   }
 
-  inventory.quantity += quantity;
-  await inventory.save();
-  return inventory;
+  await inventoryLedgerService.createLedgerEntry(organizationId, {
+    organizationId,
+    inventoryId: inventory.id,
+    itemId: inventory.itemId.id,
+    type: 'IN',
+    quantity: Math.abs(quantity),
+    reason: 'Refund stock restoration',
+    referenceType,
+    referenceId,
+    createdBy: userId,
+  });
+
+  return getInventoryById(organizationId, inventoryId);
 };
 
 module.exports = {

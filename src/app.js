@@ -13,6 +13,7 @@ const config = require('./config/config');
 const logger = require('./config/logger');
 const { jwtStrategy } = require('./config/passport');
 const { authLimiter } = require('./middlewares/rateLimiter');
+const { attachOrganization } = require('./middlewares/attachOrganization');
 const routes = require('./modules');
 const { errorConverter, errorHandler } = require('./middlewares/error');
 const ApiError = require('./utils/ApiError');
@@ -105,6 +106,9 @@ passport.use('jwt', jwtStrategy);
 if (config.env === 'production') {
   app.use('/api/auth', authLimiter);
 }
+
+// Attach tenant context from JWT for downstream controllers/services.
+app.use('/api', attachOrganization);
 
 // Health endpoint used by desktop wrapper startup checks.
 app.get('/api/health', (req, res) => {

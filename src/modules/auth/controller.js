@@ -4,7 +4,20 @@ const { authService, userService, tokenService, emailService } = require('../../
 const ApiError = require('../../utils/ApiError');
 
 const register = catchAsync(async (req, res) => {
-  const user = await userService.createUser(req.body);
+  const existingUser = await userService.getUserByEmail(req.body.email);
+  if (existingUser) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Email already taken');
+  }
+
+  const organization = await userService.createOrganizationForSignup({
+    name: req.body.organizationName,
+    plan: req.body.plan,
+  });
+
+  const user = await userService.createUser(organization.id, {
+    ...req.body,
+    role: 'owner',
+  });
   const tokens = await tokenService.generateAuthTokens(user);
 
   // Set refresh token in httpOnly cookie
@@ -92,7 +105,7 @@ const verifyEmail = catchAsync(async (req, res) => {
 });
 
 const getMe = catchAsync(async (req, res) => {
-  const user = await userService.getUserById(req.user.id);
+  const user = await userService.getUserById(req.organizationId, req.user.id);
   res.send({ user });
 });
 

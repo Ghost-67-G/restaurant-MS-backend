@@ -1,6 +1,7 @@
 const Order = require('../models/order.model');
 const OrderAdjustment = require('../models/orderAdjustment.model');
 const { ADJUSTMENT_TYPE, ORDER_STATUS } = require('../config/constants');
+const { validateOrganizationId } = require('../utils/organizationGuard');
 
 const getDefaultDateRange = () => {
   const start = new Date();
@@ -37,24 +38,22 @@ const parseDateRange = (from, to) => {
   return { start, end };
 };
 
-const getSummary = async (filters = {}) => {
-  const { from, to, orderType, includeCancelled = false, includeRefunded = true, topLimit = 10 } = filters;
+const getSummary = async (organizationId, filters = {}) => {
+  validateOrganizationId(organizationId);
+  const { from, to, includeCancelled = false, includeRefunded = true, topLimit = 10 } = filters;
 
   const { start, end } = parseDateRange(from, to);
 
   const orderMatch = {
+    organizationId,
     createdAt: {
       $gte: start,
       $lte: end,
     },
   };
 
-  if (orderType) {
-    orderMatch.orderType = orderType;
-  }
-
   if (!includeCancelled) {
-    orderMatch.status = { $ne: ORDER_STATUS.CANCELLED };
+    orderMatch.status = { $nin: [ORDER_STATUS.CANCELLED, ORDER_STATUS.VOIDED] };
   }
 
   const [orderStats = null] = await Order.aggregate([
@@ -76,11 +75,11 @@ const getSummary = async (filters = {}) => {
     },
   ]);
 
-  const orderTypeBreakdown = await Order.aggregate([
+  const paymentMethodBreakdown = await Order.aggregate([
     { $match: orderMatch },
     {
       $group: {
-        _id: '$orderType',
+        _id: '$paymentMethod',
         orders: { $sum: 1 },
         sales: { $sum: '$totalAmount' },
       },
@@ -113,9 +112,9 @@ const getSummary = async (filters = {}) => {
         itemModifierUnitTotal: {
           $sum: {
             $map: {
-              input: { $ifNull: ['$items.selectedModifiers', []] },
-              as: 'modifier',
-              in: { $ifNull: ['$$modifier.price', 0] },
+              input: { $ifNull: ['$items.selectedOptions', []] },
+              as: 'option',
+              in: { $ifNull: ['$$option.priceAdjustment', 0] },
             },
           },
         },
@@ -124,7 +123,7 @@ const getSummary = async (filters = {}) => {
     {
       $group: {
         _id: {
-          menuItemId: '$items.menuItemId',
+          itemId: '$items.itemId',
           name: '$items.name',
         },
         quantitySold: { $sum: '$items.quantity' },
@@ -132,7 +131,7 @@ const getSummary = async (filters = {}) => {
           $sum: {
             $multiply: [
               {
-                $add: [{ $ifNull: ['$items.price', 0] }, '$itemModifierUnitTotal'],
+                $add: [{ $ifNull: ['$items.unitPrice', 0] }, '$itemModifierUnitTotal'],
               },
               '$items.quantity',
             ],
@@ -151,6 +150,7 @@ const getSummary = async (filters = {}) => {
           $gte: start,
           $lte: end,
         },
+        organizationId,
       },
     },
     {
@@ -163,14 +163,6 @@ const getSummary = async (filters = {}) => {
     },
     { $unwind: '$order' },
   ];
-
-  if (orderType) {
-    adjustmentPipeline.push({
-      $match: {
-        'order.orderType': orderType,
-      },
-    });
-  }
 
   adjustmentPipeline.push(
     {
@@ -204,7 +196,6 @@ const getSummary = async (filters = {}) => {
       to: end.toISOString(),
     },
     filters: {
-      orderType: orderType || null,
       includeCancelled,
       includeRefunded,
     },
@@ -221,8 +212,8 @@ const getSummary = async (filters = {}) => {
       totalVoids,
     },
     breakdown: {
-      orderTypes: orderTypeBreakdown.map((entry) => ({
-        orderType: entry._id,
+      paymentMethods: paymentMethodBreakdown.map((entry) => ({
+        paymentMethod: entry._id,
         orders: entry.orders,
         sales: entry.sales,
       })),
@@ -232,7 +223,7 @@ const getSummary = async (filters = {}) => {
         sales: entry.sales,
       })),
       topSellingItems: topSellingItems.map((entry) => ({
-        menuItemId: entry._id.menuItemId,
+        itemId: entry._id.itemId,
         name: entry._id.name,
         quantitySold: entry.quantitySold,
         sales: entry.sales,

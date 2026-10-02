@@ -4,10 +4,10 @@ const logger = require('../config/logger');
 
 const transport = nodemailer.createTransport(config.email.smtp);
 /* istanbul ignore next */
-  transport
-    .verify()
-    .then(() => logger.info('Connected to email server'))
-    .catch(() => logger.warn('Unable to connect to email server. Make sure you have configured the SMTP options in .env'));
+transport
+  .verify()
+  .then(() => logger.info('Connected to email server'))
+  .catch(() => logger.warn('Unable to connect to email server. Make sure you have configured the SMTP options in .env'));
 
 /**
  * Send an email

@@ -16,11 +16,15 @@ router
   .get(auth(PERMISSIONS.INVENTORY.VIEW), validate(ledgerValidation.getLedgerEntry), ledgerController.getLedgerEntry);
 
 router
-  .route('/ingredient/:ingredientId')
-  .get(auth(PERMISSIONS.INVENTORY.VIEW), validate(ledgerValidation.getLedgerByIngredient), ledgerController.getLedgerByIngredient);
+  .route('/inventory/:inventoryId')
+  .get(
+    auth(PERMISSIONS.INVENTORY.VIEW),
+    validate(ledgerValidation.getLedgerByInventory),
+    ledgerController.getLedgerByInventory
+  );
 
 router
-  .route('/ingredient/:ingredientId/stats')
+  .route('/inventory/:inventoryId/stats')
   .get(auth(PERMISSIONS.INVENTORY.VIEW), validate(ledgerValidation.getLedgerStats), ledgerController.getLedgerStats);
 
 module.exports = router;

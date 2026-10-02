@@ -1,8 +1,13 @@
 const mongoose = require('mongoose');
-const { toJSON, paginate } = require('./plugins');
+const { toJSON, paginate, organizationGuard } = require('./plugins');
 
 const eventLogSchema = mongoose.Schema(
   {
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Organization',
+      index: true,
+    },
     eventName: {
       type: String,
       required: true,
@@ -40,9 +45,11 @@ const eventLogSchema = mongoose.Schema(
 // Add plugins
 eventLogSchema.plugin(toJSON);
 eventLogSchema.plugin(paginate);
+eventLogSchema.plugin(organizationGuard);
 
 // Add indexes for common queries
 eventLogSchema.index({ eventName: 1, status: 1 });
+eventLogSchema.index({ organizationId: 1, eventName: 1, createdAt: -1 });
 eventLogSchema.index({ createdAt: -1 });
 
 /**

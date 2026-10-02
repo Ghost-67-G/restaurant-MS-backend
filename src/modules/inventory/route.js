@@ -9,14 +9,30 @@ const router = express.Router();
 
 router
   .route('/')
-  .post(auth(PERMISSIONS.INVENTORY.MANAGE), validate(inventoryValidation.createInventory), inventoryController.createInventory)
-  .get(auth(PERMISSIONS.INVENTORY.VIEW), validate(inventoryValidation.getInventoryItems), inventoryController.getInventoryItems);
+  .post(
+    auth(PERMISSIONS.INVENTORY.MANAGE),
+    validate(inventoryValidation.createInventory),
+    inventoryController.createInventory
+  )
+  .get(
+    auth(PERMISSIONS.INVENTORY.VIEW),
+    validate(inventoryValidation.getInventoryItems),
+    inventoryController.getInventoryItems
+  );
 
 router
   .route('/:inventoryId')
   .get(auth(PERMISSIONS.INVENTORY.VIEW), validate(inventoryValidation.getInventory), inventoryController.getInventory)
-  .patch(auth(PERMISSIONS.INVENTORY.ADJUST), validate(inventoryValidation.updateInventory), inventoryController.updateInventory)
-  .delete(auth(PERMISSIONS.INVENTORY.MANAGE), validate(inventoryValidation.deleteInventory), inventoryController.deleteInventory);
+  .patch(
+    auth(PERMISSIONS.INVENTORY.ADJUST),
+    validate(inventoryValidation.updateInventory),
+    inventoryController.updateInventory
+  )
+  .delete(
+    auth(PERMISSIONS.INVENTORY.MANAGE),
+    validate(inventoryValidation.deleteInventory),
+    inventoryController.deleteInventory
+  );
 
 module.exports = router;
 

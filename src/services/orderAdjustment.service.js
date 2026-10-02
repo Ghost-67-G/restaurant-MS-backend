@@ -4,6 +4,7 @@ const Order = require('../models/order.model');
 const { ADJUSTMENT_TYPE, ORDER_STATUS } = require('../config/constants');
 const { eventEmitter, EVENTS } = require('../utils/eventEmitter');
 const ApiError = require('../utils/ApiError');
+const { validateOrganizationId, buildOrganizationFilter, safeFindOne } = require('../utils/organizationGuard');
 
 /**
  * Create an order adjustment (refund or void)
@@ -12,10 +13,11 @@ const ApiError = require('../utils/ApiError');
  * @param {string} adjustmentData.type - REFUND or VOID
  * @param {number} adjustmentData.amount
  * @param {string} adjustmentData.reason
- * @param {ObjectId} userId - User creating the adjustment
+ * @param {Object} user - User creating the adjustment
  * @returns {Promise<OrderAdjustment>}
  */
-const createAdjustment = async (adjustmentData, userId) => {
+const createAdjustment = async (organizationId, adjustmentData, user) => {
+  const normalizedOrganizationId = validateOrganizationId(organizationId);
   const { orderId, type, amount, reason } = adjustmentData;
 
   // Validate adjustment type
@@ -24,7 +26,7 @@ const createAdjustment = async (adjustmentData, userId) => {
   }
 
   // Get the order
-  const order = await Order.findById(orderId);
+  const order = await safeFindOne(Order, normalizedOrganizationId, { _id: orderId });
   if (!order) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Order not found');
   }
@@ -67,36 +69,40 @@ const createAdjustment = async (adjustmentData, userId) => {
 
   // Create the adjustment
   const adjustment = await OrderAdjustment.create({
+    organizationId: normalizedOrganizationId,
     orderId,
     type,
     amount,
     reason,
-    createdBy: userId,
+    createdBy: user.id,
   });
 
   // Update order status
   if (type === ADJUSTMENT_TYPE.VOID) {
     order.isVoided = true;
-    order.status = ORDER_STATUS.CANCELLED;
+    order.status = ORDER_STATUS.VOIDED;
     await order.save();
 
-    // Emit void event (no inventory movement needed since order wasn't completed)
     eventEmitter.emitEvent(EVENTS.ORDER_VOIDED, {
+      organizationId: normalizedOrganizationId,
       orderId: orderId.toString(),
       adjustmentId: adjustment._id.toString(),
-      userId,
+      userId: user.id,
       reason,
     });
   } else if (type === ADJUSTMENT_TYPE.REFUND) {
     order.refundedAmount += amount;
     order.isRefunded = order.refundedAmount >= order.totalAmount;
+    if (order.isRefunded) {
+      order.status = ORDER_STATUS.REFUNDED;
+    }
     await order.save();
 
-    // Emit refund event (inventory should be restored)
     eventEmitter.emitEvent(EVENTS.ORDER_REFUNDED, {
+      organizationId: normalizedOrganizationId,
       orderId: orderId.toString(),
       adjustmentId: adjustment._id.toString(),
-      userId,
+      userId: user.id,
       amount,
       reason,
       isFullRefund: order.isRefunded,
@@ -112,8 +118,11 @@ const createAdjustment = async (adjustmentData, userId) => {
  * @param {ObjectId} orderId
  * @returns {Promise<OrderAdjustment[]>}
  */
-const getOrderAdjustments = async (orderId) => {
-  return OrderAdjustment.find({ orderId }).populate('createdBy', 'name email').sort({ createdAt: -1 });
+const getOrderAdjustments = async (organizationId, orderId) => {
+  validateOrganizationId(organizationId);
+  return OrderAdjustment.find(buildOrganizationFilter(organizationId, { orderId }))
+    .populate('createdBy', 'name email')
+    .sort({ createdAt: -1 });
 };
 
 /**
@@ -122,8 +131,9 @@ const getOrderAdjustments = async (orderId) => {
  * @param {Object} options - Query options
  * @returns {Promise<QueryResult>}
  */
-const queryAdjustments = async (filter, options) => {
-  const adjustments = await OrderAdjustment.paginate(filter, options);
+const queryAdjustments = async (organizationId, filter, options) => {
+  validateOrganizationId(organizationId);
+  const adjustments = await OrderAdjustment.paginate(buildOrganizationFilter(organizationId, filter), options);
   return adjustments;
 };
 
@@ -132,8 +142,11 @@ const queryAdjustments = async (filter, options) => {
  * @param {ObjectId} adjustmentId
  * @returns {Promise<OrderAdjustment>}
  */
-const getAdjustmentById = async (adjustmentId) => {
-  return OrderAdjustment.findById(adjustmentId).populate('createdBy', 'name email').populate('orderId');
+const getAdjustmentById = async (organizationId, adjustmentId) => {
+  validateOrganizationId(organizationId);
+  return safeFindOne(OrderAdjustment, organizationId, { _id: adjustmentId })
+    .populate('createdBy', 'name email')
+    .populate('orderId');
 };
 
 module.exports = {

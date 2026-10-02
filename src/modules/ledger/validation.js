@@ -3,9 +3,10 @@ const { objectId } = require('../../validations/custom.validation');
 
 const getLedgerEntries = {
   query: Joi.object().keys({
-    ingredientId: Joi.string().custom(objectId),
-    type: Joi.string().valid('IN', 'OUT', 'WASTE', 'ADJUSTMENT'),
-    referenceType: Joi.string().valid('ORDER', 'PURCHASE', 'WASTE', 'MANUAL'),
+    inventoryId: Joi.string().custom(objectId),
+    itemId: Joi.string().custom(objectId),
+    type: Joi.string().valid('IN', 'OUT', 'ADJUSTMENT'),
+    referenceType: Joi.string().valid('ORDER', 'PURCHASE', 'REFUND', 'MANUAL'),
     createdBy: Joi.string().custom(objectId),
     sortBy: Joi.string(),
     limit: Joi.number().integer(),
@@ -19,9 +20,9 @@ const getLedgerEntry = {
   }),
 };
 
-const getLedgerByIngredient = {
+const getLedgerByInventory = {
   params: Joi.object().keys({
-    ingredientId: Joi.string().custom(objectId),
+    inventoryId: Joi.string().custom(objectId),
   }),
   query: Joi.object().keys({
     sortBy: Joi.string(),
@@ -32,7 +33,7 @@ const getLedgerByIngredient = {
 
 const getLedgerStats = {
   params: Joi.object().keys({
-    ingredientId: Joi.string().custom(objectId),
+    inventoryId: Joi.string().custom(objectId),
   }),
   query: Joi.object().keys({
     startDate: Joi.date(),
@@ -43,6 +44,6 @@ const getLedgerStats = {
 module.exports = {
   getLedgerEntries,
   getLedgerEntry,
-  getLedgerByIngredient,
+  getLedgerByInventory,
   getLedgerStats,
 };
