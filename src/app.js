@@ -20,6 +20,7 @@ const ApiError = require('./utils/ApiError');
 
 const app = express();
 const runtimeMode = process.env.RMS_RUNTIME === 'desktop' ? 'desktop' : 'web';
+app.set('trust proxy', 1);
 
 // set security HTTP headers
 app.use(helmet());
