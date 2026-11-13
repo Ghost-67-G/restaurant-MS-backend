@@ -5,7 +5,12 @@ const { InventoryLedger, Inventory } = require('../models');
 const ApiError = require('../utils/ApiError');
 const stockAlertService = require('./stockAlert.service');
 const logger = require('../config/logger');
-const { validateOrganizationId, buildOrganizationFilter, safeFindOne } = require('../utils/organizationGuard');
+const {
+  validateOrganizationId,
+  buildOrganizationFilter,
+  safeFindOne,
+  scopedPopulate,
+} = require('../utils/organizationGuard');
 
 const normalizeLedgerEntry = (organizationId, ledgerData) => ({
   ...ledgerData,
@@ -298,7 +303,7 @@ const queryLedgerEntries = async (organizationId, filter, options) => {
   validateOrganizationId(organizationId);
   const ledgerEntries = await InventoryLedger.paginate(buildOrganizationFilter(organizationId, filter), {
     ...options,
-    populate: 'inventoryId itemId createdBy',
+    populate: scopedPopulate(organizationId, 'inventoryId itemId createdBy'),
   });
   return ledgerEntries;
 };
@@ -321,7 +326,9 @@ const getLedgerByInventory = async (organizationId, inventoryId, options = {}) =
  */
 const getLedgerEntryById = async (organizationId, id) => {
   validateOrganizationId(organizationId);
-  return safeFindOne(InventoryLedger, organizationId, { _id: id }).populate('inventoryId itemId createdBy');
+  return safeFindOne(InventoryLedger, organizationId, { _id: id }).populate(
+    scopedPopulate(organizationId, 'inventoryId itemId createdBy')
+  );
 };
 
 /**

@@ -1,5 +1,10 @@
 const { StockAlert, Inventory } = require('../models');
-const { validateOrganizationId, buildOrganizationFilter, safeFindOne } = require('../utils/organizationGuard');
+const {
+  validateOrganizationId,
+  buildOrganizationFilter,
+  safeFindOne,
+  scopedPopulate,
+} = require('../utils/organizationGuard');
 
 /**
  * Check all inventory records and create alerts for low stock
@@ -7,7 +12,9 @@ const { validateOrganizationId, buildOrganizationFilter, safeFindOne } = require
  */
 const checkAndCreateAlerts = async (organizationId) => {
   validateOrganizationId(organizationId);
-  const inventoryRecords = await Inventory.find(buildOrganizationFilter(organizationId)).populate('itemId');
+  const inventoryRecords = await Inventory.find(buildOrganizationFilter(organizationId)).populate(
+    scopedPopulate(organizationId, 'itemId')
+  );
 
   const alertPromises = inventoryRecords
     .filter((inventory) => inventory.quantity <= inventory.lowStockThreshold)
@@ -42,7 +49,9 @@ const checkAndCreateAlerts = async (organizationId) => {
  */
 const checkInventoryStock = async (organizationId, inventoryId) => {
   validateOrganizationId(organizationId);
-  const inventory = await safeFindOne(Inventory, organizationId, { _id: inventoryId }).populate('itemId');
+  const inventory = await safeFindOne(Inventory, organizationId, { _id: inventoryId }).populate(
+    scopedPopulate(organizationId, 'itemId')
+  );
 
   if (!inventory) {
     return null;
@@ -80,7 +89,7 @@ const getActiveAlerts = async (organizationId, filter, options) => {
   validateOrganizationId(organizationId);
   const alerts = await StockAlert.paginate(buildOrganizationFilter(organizationId, { ...filter, status: 'PENDING' }), {
     ...options,
-    populate: 'inventoryId itemId acknowledgedBy',
+    populate: scopedPopulate(organizationId, 'inventoryId itemId acknowledgedBy'),
     sortBy: 'triggeredAt:desc',
   });
   return alerts;
@@ -96,7 +105,7 @@ const getAlerts = async (organizationId, filter, options) => {
   validateOrganizationId(organizationId);
   const alerts = await StockAlert.paginate(buildOrganizationFilter(organizationId, filter), {
     ...options,
-    populate: 'inventoryId itemId acknowledgedBy',
+    populate: scopedPopulate(organizationId, 'inventoryId itemId acknowledgedBy'),
     sortBy: 'triggeredAt:desc',
   });
   return alerts;
@@ -109,7 +118,9 @@ const getAlerts = async (organizationId, filter, options) => {
  */
 const getAlertById = async (organizationId, id) => {
   validateOrganizationId(organizationId);
-  return safeFindOne(StockAlert, organizationId, { _id: id }).populate('inventoryId itemId acknowledgedBy');
+  return safeFindOne(StockAlert, organizationId, { _id: id }).populate(
+    scopedPopulate(organizationId, 'inventoryId itemId acknowledgedBy')
+  );
 };
 
 /**

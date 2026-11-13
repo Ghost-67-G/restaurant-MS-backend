@@ -2,7 +2,13 @@ const httpStatus = require('http-status');
 const { Inventory, Item } = require('../models');
 const ApiError = require('../utils/ApiError');
 const inventoryLedgerService = require('./inventoryLedger.service');
-const { validateOrganizationId, buildOrganizationFilter, safeFindOne, safeQuery } = require('../utils/organizationGuard');
+const {
+  validateOrganizationId,
+  buildOrganizationFilter,
+  safeFindOne,
+  safeQuery,
+  scopedPopulate,
+} = require('../utils/organizationGuard');
 
 /**
  * Create an inventory item
@@ -46,7 +52,7 @@ const queryInventory = async (organizationId, filter, options) => {
 
   const inventory = await Inventory.paginate(queryFilter, {
     ...options,
-    populate: 'itemId',
+    populate: scopedPopulate(organizationId, 'itemId'),
   });
   return inventory;
 };
@@ -58,7 +64,7 @@ const queryInventory = async (organizationId, filter, options) => {
  */
 const getInventoryById = async (organizationId, id) => {
   validateOrganizationId(organizationId);
-  return safeFindOne(Inventory, organizationId, { _id: id }).populate('itemId');
+  return safeFindOne(Inventory, organizationId, { _id: id }).populate(scopedPopulate(organizationId, 'itemId'));
 };
 
 /**
@@ -96,7 +102,8 @@ const updateInventoryById = async (organizationId, inventoryId, updateBody, user
   }
 
   await inventory.save();
-  return inventory;
+  // Quantity is changed through the ledger, so re-read to return the current stock.
+  return getInventoryById(organizationId, inventoryId);
 };
 
 /**

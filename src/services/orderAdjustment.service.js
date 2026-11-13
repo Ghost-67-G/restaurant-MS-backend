@@ -4,7 +4,12 @@ const Order = require('../models/order.model');
 const { ADJUSTMENT_TYPE, ORDER_STATUS } = require('../config/constants');
 const { eventEmitter, EVENTS } = require('../utils/eventEmitter');
 const ApiError = require('../utils/ApiError');
-const { validateOrganizationId, buildOrganizationFilter, safeFindOne } = require('../utils/organizationGuard');
+const {
+  validateOrganizationId,
+  buildOrganizationFilter,
+  safeFindOne,
+  scopedPopulate,
+} = require('../utils/organizationGuard');
 
 /**
  * Create an order adjustment (refund or void)
@@ -144,9 +149,9 @@ const queryAdjustments = async (organizationId, filter, options) => {
  */
 const getAdjustmentById = async (organizationId, adjustmentId) => {
   validateOrganizationId(organizationId);
-  return safeFindOne(OrderAdjustment, organizationId, { _id: adjustmentId })
-    .populate('createdBy', 'name email')
-    .populate('orderId');
+  return safeFindOne(OrderAdjustment, organizationId, { _id: adjustmentId }).populate(
+    scopedPopulate(organizationId, 'createdBy orderId', { createdBy: 'name email' })
+  );
 };
 
 module.exports = {

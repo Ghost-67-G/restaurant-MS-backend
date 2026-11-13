@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Order = require('../models/order.model');
 const OrderAdjustment = require('../models/orderAdjustment.model');
 const { ADJUSTMENT_TYPE, ORDER_STATUS } = require('../config/constants');
@@ -44,8 +45,11 @@ const getSummary = async (organizationId, filters = {}) => {
 
   const { start, end } = parseDateRange(from, to);
 
+  // Aggregations don't cast types, so the string id must become an ObjectId.
+  const organizationObjectId = new mongoose.Types.ObjectId(organizationId);
+
   const orderMatch = {
-    organizationId,
+    organizationId: organizationObjectId,
     createdAt: {
       $gte: start,
       $lte: end,
@@ -150,7 +154,7 @@ const getSummary = async (organizationId, filters = {}) => {
           $gte: start,
           $lte: end,
         },
-        organizationId,
+        organizationId: organizationObjectId,
       },
     },
     {

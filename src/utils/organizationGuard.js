@@ -76,7 +76,37 @@ const safeFindOne = (model, organizationId, filter = {}, projection = null, opti
   return model.findOne(buildOrganizationFilter(organizationId, filter), projection, options);
 };
 
+// Refs that point at tenant-owned (organizationGuard-protected) models.
+const TENANT_SCOPED_REFS = ['itemId', 'inventoryId', 'orderId'];
+
+/**
+ * Build populate options that keep tenant-owned refs inside the organization.
+ * Mongoose populate runs `Model.find({ _id: { $in: ids } })` without organizationId,
+ * which the organizationGuard plugin rejects. Adding `match` scopes those lookups.
+ * @param {string} organizationId
+ * @param {string} paths - space-separated populate paths, e.g. 'inventoryId itemId createdBy'
+ * @param {Object} [selectByPath] - optional field selection per path, e.g. { createdBy: 'name email' }
+ * @returns {Object[]}
+ */
+const scopedPopulate = (organizationId, paths, selectByPath = {}) => {
+  const normalizedOrganizationId = validateOrganizationId(organizationId);
+  return paths
+    .split(' ')
+    .filter(Boolean)
+    .map((path) => {
+      const option = { path };
+      if (TENANT_SCOPED_REFS.includes(path)) {
+        option.match = { organizationId: normalizedOrganizationId };
+      }
+      if (selectByPath[path]) {
+        option.select = selectByPath[path];
+      }
+      return option;
+    });
+};
+
 module.exports = {
+  scopedPopulate,
   validateOrganizationId,
   buildOrganizationFilter,
   safeQuery,

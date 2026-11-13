@@ -3,6 +3,7 @@ const app = require('./app');
 const config = require('./config/config');
 const logger = require('./config/logger');
 const { registerEventHandlers } = require('./events');
+const Invoice = require('./models/invoice.model');
 
 let server;
 const mongooseOptions = {
@@ -10,12 +11,19 @@ const mongooseOptions = {
   serverSelectionTimeoutMS: 10000,
 };
 
-logger.info(`Connecting to MongoDB at ${config.mongoose.url}`);
+logger.info('Connecting to MongoDB...');
 
 mongoose
   .connect(config.mongoose.url, mongooseOptions)
   .then(() => {
     logger.info('Connected to MongoDB');
+
+    // Older databases have a global unique index on invoiceNumber, which blocks a
+    // second organization from numbering its invoices. Replace it with the
+    // per-organization index defined in the schema.
+    Invoice.syncIndexes().catch((error) => {
+      logger.error(`Invoice index sync failed: ${error.message}`);
+    });
 
     // Register event handlers
     registerEventHandlers();

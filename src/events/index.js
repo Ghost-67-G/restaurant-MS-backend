@@ -42,7 +42,7 @@ const updateEventLog = async (logId, status, error = null) => {
       update.error = error;
     }
 
-    await EventLog.findByIdAndUpdate(logId, update);
+    await EventLog.findOneAndUpdate({ _id: logId._id, organizationId: logId.organizationId }, update);
   } catch (err) {
     logger.error('Failed to update event log:', err);
   }
@@ -76,10 +76,13 @@ const registerEventHandlers = () => {
     const logId = await createEventLog(EVENTS.ORDER_COMPLETED, data);
     try {
       if (logId) {
-        await EventLog.findByIdAndUpdate(logId, {
-          status: 'processing',
-          processingStartedAt: new Date(),
-        });
+        await EventLog.findOneAndUpdate(
+          { _id: logId._id, organizationId: logId.organizationId },
+          {
+            status: 'processing',
+            processingStartedAt: new Date(),
+          }
+        );
       }
       await orderEvents.handleOrderCompleted(data);
       await updateEventLog(logId, 'completed');
@@ -94,10 +97,13 @@ const registerEventHandlers = () => {
     const logId = await createEventLog(EVENTS.ORDER_CANCELLED, data);
     try {
       if (logId) {
-        await EventLog.findByIdAndUpdate(logId, {
-          status: 'processing',
-          processingStartedAt: new Date(),
-        });
+        await EventLog.findOneAndUpdate(
+          { _id: logId._id, organizationId: logId.organizationId },
+          {
+            status: 'processing',
+            processingStartedAt: new Date(),
+          }
+        );
       }
       await orderEvents.handleOrderCancelled(data);
       await updateEventLog(logId, 'completed');
@@ -111,10 +117,13 @@ const registerEventHandlers = () => {
     const logId = await createEventLog(EVENTS.ORDER_REFUNDED, data);
     try {
       if (logId) {
-        await EventLog.findByIdAndUpdate(logId, {
-          status: 'processing',
-          processingStartedAt: new Date(),
-        });
+        await EventLog.findOneAndUpdate(
+          { _id: logId._id, organizationId: logId.organizationId },
+          {
+            status: 'processing',
+            processingStartedAt: new Date(),
+          }
+        );
       }
       await orderEvents.handleOrderRefunded(data);
       await updateEventLog(logId, 'completed');
@@ -128,10 +137,13 @@ const registerEventHandlers = () => {
     const logId = await createEventLog(EVENTS.ORDER_VOIDED, data);
     try {
       if (logId) {
-        await EventLog.findByIdAndUpdate(logId, {
-          status: 'processing',
-          processingStartedAt: new Date(),
-        });
+        await EventLog.findOneAndUpdate(
+          { _id: logId._id, organizationId: logId.organizationId },
+          {
+            status: 'processing',
+            processingStartedAt: new Date(),
+          }
+        );
       }
       await orderEvents.handleOrderVoided(data);
       await updateEventLog(logId, 'completed');

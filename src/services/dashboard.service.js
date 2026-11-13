@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Order = require('../models/order.model');
 const { ORDER_STATUS } = require('../config/constants');
 const { validateOrganizationId } = require('../utils/organizationGuard');
@@ -19,7 +20,8 @@ const getTodayStats = async (organizationId) => {
   const stats = await Order.aggregate([
     {
       $match: {
-        organizationId,
+        // Aggregations don't cast types, so the string id must become an ObjectId.
+        organizationId: new mongoose.Types.ObjectId(organizationId),
         createdAt: {
           $gte: startOfDay,
           $lte: endOfDay,

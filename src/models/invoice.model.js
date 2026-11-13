@@ -18,7 +18,6 @@ const invoiceSchema = mongoose.Schema(
     invoiceNumber: {
       type: String,
       required: true,
-      unique: true,
       index: true,
     },
     snapshot: {
@@ -47,8 +46,8 @@ invoiceSchema.plugin(paginate);
 invoiceSchema.plugin(organizationGuard);
 
 // Indexes for queries
-invoiceSchema.index({ invoiceNumber: 1 });
-invoiceSchema.index({ organizationId: 1, invoiceNumber: 1 });
+// Numbers restart per organization (INV-YYYYMMDD-0001), so uniqueness is per organization.
+invoiceSchema.index({ organizationId: 1, invoiceNumber: 1 }, { unique: true });
 invoiceSchema.index({ orderId: 1 });
 invoiceSchema.index({ createdAt: -1 });
 
