@@ -1,10 +1,18 @@
 const httpStatus = require('http-status');
 const catchAsync = require('../../utils/catchAsync');
 const { authService, userService, tokenService, emailService } = require('../../services');
+const { User } = require('../../models');
 const ApiError = require('../../utils/ApiError');
 
 const register = catchAsync(async (req, res) => {
-  const user = await userService.createUser(req.body);
+  // One deployment serves one restaurant and all accounts share its data.
+  // Signup only creates the first account (the owner); after that the owner
+  // adds staff from the Users page.
+  if ((await User.countDocuments({})) > 0) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Registration is closed. Ask the restaurant owner to create your account.');
+  }
+
+  const user = await userService.createUser({ ...req.body, role: 'owner' });
   const tokens = await tokenService.generateAuthTokens(user);
 
   // Set refresh token in httpOnly cookie

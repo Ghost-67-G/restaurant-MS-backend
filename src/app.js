@@ -19,6 +19,9 @@ const ApiError = require('./utils/ApiError');
 
 const app = express();
 const runtimeMode = process.env.RMS_RUNTIME === 'desktop' ? 'desktop' : 'web';
+// Behind a reverse proxy (Coolify/Caddy): use the client IP from X-Forwarded-For,
+// otherwise the login rate limiter treats every user as the same IP.
+app.set('trust proxy', 1);
 
 // set security HTTP headers
 app.use(helmet());
